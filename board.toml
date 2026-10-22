@@ -15,7 +15,11 @@ build = "21H461"
 device_class = "j120ap"
 chip_id = 0x8011
 board_id = 12
-fetch = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustCache"]
+# OS and Cryptex1,SystemOS are the two windows the userdata image is built from: the
+# userdata step copies them byte for byte behind the SHNGROOT manifest. Without them
+# `unixnu build userdata` has nothing to lay out, and the kernel has no root to mount.
+fetch = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustCache",
+         "OS", "Cryptex1,SystemOS"]
 
 [ipsw.sha256]
 "044-76040-038.dmg" = "3f99b859c9728379110b66657c7b15285bcb1925ad8b5726542e2cdcf8b1028d"
