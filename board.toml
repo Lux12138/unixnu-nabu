@@ -37,9 +37,6 @@ archives = [
   "build-arm-driver.py ArmCpu",
   "build-arm-driver.py NativeAES",
   "build-arm-driver.py NativeUfs",
-  # Builtin pthread provider. sheng does not list com.apple.kec.pthread in its prelink
-  # roots because this archive supplies the pthread symbols from source instead.
-  "build-libpthread-kernel.py",
   # mockfs needs its fixture object; without it the file system code is present but the
   # mount path has no fixture to build against.
   "build-mockfs-fixture.py",
@@ -111,8 +108,7 @@ roots = [
   # pthread_shims.c aborts with "pthread kernel extension not loaded (function table)"
   # unless com.apple.kec.pthread is prelinked: it supplies the pthread function table
   # the shims call through.
-  # com.apple.kec.pthread is deliberately absent: build-libpthread-kernel.py
-  # provides the pthread symbols from source, as sheng does.
+  "com.apple.kec.pthread",
   "com.apple.kec.Libm",
   "com.apple.kec.corecrypto",
   "com.apple.kext.AppleMatch",
