@@ -51,12 +51,19 @@ path = "Payloads/kernel.macho"
 # console exists is what stopped the boot at checkpoint 50. Keep the args minimal.
 # rd=md0 makes the RAM disk /dev/md0, which mockfs mounts as the root.
 initrd = "Payloads/ramdisk.img"
-# boot-progress=1 arms the built-in diagnostic page: a 48x120 text overlay drawn into
-# the XNU framebuffer mapping that reports time, idle, IRQ count, root state, free
-# pages and the last interrupt-entry PC, and freezes after 30 s without progress so it
-# can be photographed. sheng-build-tag labels the title bar so a photo identifies the
-# image. This replaces our hand-rolled nabu_mark probes, which only show a counter.
-args = "-v serial=3 debug=0x14e boot-progress=1 sheng-build-tag=nav1 rd=md0"
+# Arguments taken from the documented debugging table in /xnu/boot-arguments, not
+# invented here:
+#
+#   -v serial=3 debug=0x14e   early kernel output
+#   kextlog=0xfff             verbose kext logging -- names the kext that stops loading
+#   kt_fixed_zones=120        fixed trace zone count, as sheng uses
+#   -no_slto_panic            suppress the SLTO panic
+#   amfi_get_out_of_my_way=1  run without AMFI enforcement (diagnostic boot only per the
+#                             docs; our payload is unsigned anyway)
+#
+# boot-progress is deliberately absent: it requires CONFIG_XNU_NATIVE_UFS=1, which
+# collides with the IOBlockStorageDevice that apfs pulls in through IOStorageFamily.
+args = "-v serial=3 debug=0x14e kextlog=0xfff kt_fixed_zones=120 -no_slto_panic amfi_get_out_of_my_way=1 rd=md0"
 TOML
 
 rm -f "$OUT"
