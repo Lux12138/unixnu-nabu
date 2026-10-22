@@ -13,13 +13,13 @@ mkdir -p "$STAGE/EFI/UniXNU/Payloads"
 cp "$K" "$STAGE/EFI/UniXNU/Payloads/kernel.macho"
 cp "$A" "$STAGE/EFI/UniXNU/Payloads/kernel.macho.adt"
 
-# A minimal RAM disk: mockfs_mountroot needs a root vnode that answers
+# A 4 MiB RAM disk (the payload volume is 64 MiB and the kernel takes 51): mockfs_mountroot needs a root vnode that answers
 # DKIOCGETMEMDEVINFO, and IOMedia only appears for a real device. The contents can be
 # empty for a bring-up check -- init will simply fail to find /sbin/launchd afterwards,
 # which is the expected next step.
 RAMDISK="$STAGE/EFI/UniXNU/Payloads/ramdisk.img"
 if [ ! -f "$RAMDISK" ]; then
-  dd if=/dev/zero of="$RAMDISK" bs=1M count=16 status=none
+  dd if=/dev/zero of="$RAMDISK" bs=1M count=4 status=none
   if command -v mkfs.vfat >/dev/null 2>&1; then
     mkfs.vfat -F 16 -n NABURD "$RAMDISK" >/dev/null 2>&1 || true
   fi
