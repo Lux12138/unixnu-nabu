@@ -84,11 +84,6 @@ roots = [
   # IOSurfaceFamily; with IOMobileGraphicsFamily already dropped, only IOGPUFamily
   # pulls that dependency, so adding IOSurface back should not reintroduce the
   # duplicate OSMetaClass registration.
-  # mockfs_mountroot issues DKIOCGETMEMDEVINFO against the root vnode, which needs
-  # the IOMedia class -- that comes from IOStorageFamily. It was dropped earlier so
-  # IOBlockStorageDevice would not be registered twice, but NativeUfs (which linked
-  # its own copy into the kernel) is now disabled, so that conflict is gone.
-  "com.apple.iokit.IOStorageFamily",
   "com.apple.iokit.IOSurface",
   "com.apple.iokit.IOGPUFamily",
   # Removed com.apple.iokit.IOMobileGraphicsFamily: it and IOGPUFamily both depend on
