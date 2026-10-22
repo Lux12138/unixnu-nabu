@@ -145,6 +145,21 @@ jobs:
           ls -lh out/nabu/kernel/ || true
         timeout-minutes: 180
 
+      # The documented pipeline is defconfig -> fetch -> tree -> ipsw fetch ->
+      # build kernel -> build payload -> bootimg. We were stopping after build kernel and
+      # assembling the payload by hand (copying kernel.macho, calling make-nabu-adt.py,
+      # writing unixnu.toml, mcopy-ing a FAT volume). `build payload` does all of that from
+      # board.toml: it generates the ADT, writes the config, and lays out the volume at
+      # [payload] size_mib with the volume label.
+      - name: Build payload
+        if: always()
+        run: |
+          cd UniXNU
+          ./unixnu build payload --unique-chip-id 0x1 || true
+          echo '--- payload output ---'
+          ls -lh out/nabu/payload/ 2>/dev/null || echo 'no payload dir'
+          find out/nabu/payload -maxdepth 2 -type f 2>/dev/null | head -20 || true
+
       - name: Verify early checkpoint marks
         if: always()
         run: |
