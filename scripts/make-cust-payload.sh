@@ -13,6 +13,19 @@ mkdir -p "$STAGE/EFI/UniXNU/Payloads"
 cp "$K" "$STAGE/EFI/UniXNU/Payloads/kernel.macho"
 cp "$A" "$STAGE/EFI/UniXNU/Payloads/kernel.macho.adt"
 
+# A minimal RAM disk: mockfs_mountroot needs a root vnode that answers
+# DKIOCGETMEMDEVINFO, and IOMedia only appears for a real device. The contents can be
+# empty for a bring-up check -- init will simply fail to find /sbin/launchd afterwards,
+# which is the expected next step.
+RAMDISK="$STAGE/EFI/UniXNU/Payloads/ramdisk.img"
+if [ ! -f "$RAMDISK" ]; then
+  dd if=/dev/zero of="$RAMDISK" bs=1M count=16 status=none
+  if command -v mkfs.vfat >/dev/null 2>&1; then
+    mkfs.vfat -F 16 -n NABURD "$RAMDISK" >/dev/null 2>&1 || true
+  fi
+fi
+echo "ramdisk: $(stat -c %s "$RAMDISK" 2>/dev/null || echo 0) bytes"
+
 cat > "$STAGE/EFI/UniXNU/unixnu.toml" <<'TOML'
 version = 1
 
@@ -36,7 +49,9 @@ path = "Payloads/kernel.macho"
 # -v/debug=0x14e turn on STARTUP_DEBUG_VERBOSE: kernel_startup_log() then calls
 # kprintf once startup_phase passes STARTUP_SUB_KPRINTF, and kprintf before the
 # console exists is what stopped the boot at checkpoint 50. Keep the args minimal.
-args = "-v serial=3 debug=0x14e -enable_kprintf_spam"
+# rd=md0 makes the RAM disk /dev/md0, which mockfs mounts as the root.
+initrd = "Payloads/ramdisk.img"
+args = "-v serial=3 debug=0x14e -enable_kprintf_spam rd=md0"
 TOML
 
 rm -f "$OUT"
