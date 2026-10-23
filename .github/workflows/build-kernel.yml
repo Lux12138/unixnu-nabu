@@ -111,16 +111,18 @@ jobs:
             -o ".cache/sources/xnu-trustcache-$TSHORT.json"
           echo "=== cached json ==="
           ls -la .cache/sources/
+      # The reference checkout has to live outside out/nabu/tree: unixnu tree rebuilds that
+      # directory, and a foreign directory inside it made the build fail with
+      #   PermissionError: Operation not permitted: .../tree/refer/IOStorageFamily
       - name: Fetch IOStorageFamily (public Apple Darwin 23 source)
         run: |
-          cd UniXNU/out/nabu/tree
+          cd UniXNU
           mkdir -p refer
           if [ ! -d refer/IOStorageFamily/.git ]; then
             git clone --filter=blob:none https://github.com/apple-oss-distributions/IOStorageFamily.git refer/IOStorageFamily
           fi
           git -C refer/IOStorageFamily checkout -q e45fbe30a7879e0b16e26dddb78538f1b00e0bff
           echo "IOStorageFamily HEAD: $(git -C refer/IOStorageFamily rev-parse HEAD)"
-
 
       # The kernel build is 8 of the 9 minutes. Reusing the object tree turns a full
       # rebuild into an incremental one, which is the only lever available without a macOS
