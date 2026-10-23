@@ -550,6 +550,57 @@ fastboot flash userdata out/nabu/userdata/userdata-root.img
 
 
 
+
+> ### 🎯 突破：根卷找到，launchd 出现（B returned 1）
+>
+> ```
+> IOFindBSDRoot entered
+> B returned1              ← waitForService 返回了服务：带 UUID 的 IOMedia 找到了
+> launchd                  ← 内核进到 load_init_program / execve
+> unexpected STATUS!! ...
+> ESR=0x96000045  FAR=0x16eff7eb8
+> PC=0xfffffff00740eb60  LR=0xfffffff0073fb070
+> ```
+>
+> **这是本移植第一次让 `waitForService(IOMedia+UUID)` 真的返回。** 之前所有版本都是等不到、
+> 或直接空转；这一次根卷匹配成功，`mountroot` 走通，内核继续到 `launchd`。
+>
+> 触发条件：退休 `keys`/`walk`/`guard` 三个探针之后匹配才成功。它们每次都在
+> `getMatchingServices` 里遍历整个注册表，很可能扰乱了匹配时序。
+>
+> ### 新的卡点：execve 写用户栈时 fault
+>
+> ```
+> PC  = __bcopyout + 0x1c      内核在 copyout（往用户空间写）
+> LR  = _copyout + 0x70        调用者
+> FAR = 0x16eff7eb8            目标地址（合法的 ARM64 用户地址，但未映射）
+> ESR = 0x96000045             EC=0x25 Data Abort, WnR=1 写, DFSC=0x5 translation fault L1
+> ```
+>
+> 也就是：`/sbin/launchd` 已被加载，内核正在把 argv/envp 复制到新进程用户栈，而目标页没有建立
+> 映射。**这属于 VM / execve 层，与存储路径无关。**
+>
+> 待查方向：
+>
+> 1. `execve` 里用户栈的分配路径（`exec_mach_imgact` → `allocate_user_stack`）是否因为
+>    `userdata` 上的某些条件被跳过；
+> 2. 用户地址空间的上限与该地址（6.1 GiB）的关系 —— 我们的 `dram_size = 0x300000000`（12 GiB），
+>    用户 VA 布局可能与这个规模有关；
+> 3. 是否存在「页表项建好但 pmap 未同步」的时序问题。
+>
+> ### 今晚完整链条
+>
+> ```
+> boot-arg 修复        -> ufs:entered
+> IODelay 换自旋       -> host:lun
+> validate() 打开      -> prep:attach-done
+> start() 插桩         -> start:ok
+> 块设备发布           -> walk 3->5
+> 时基确认             -> clock:advances
+> waitForService 换忙等 -> B returned 1     ★ 根卷找到
+> 退休干扰探针         -> launchd            ★ execve 开始
+> ```
+
 > ### 今晚的完整链路（从静默到精确失败）
 >
 > 起点：屏幕一片白字、六行探针不动、完全不知道内核停在哪。
