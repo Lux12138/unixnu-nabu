@@ -42,6 +42,14 @@ archives = [
   "build-arm-driver.py NativeUfs",
   # mockfs needs its fixture object; without it the file system code is present but the
   # mount path has no fixture to build against.
+    # The virtio and ram block drivers produce the archives that
+    # CONFIG_XNU_NATIVE_VIRTIO_BLOCK_ARCHIVE / _RAM_BLOCK expect; without them kernel.py
+    # refuses with "no builder makes it, supply the archive".
+    "build-arm-driver.py NativeVirtioBlock",
+    "build-native-virtio-bindings.py --component NativeVirtioBlock",
+    "build-arm-driver.py NativeRamBlock",
+    "build-native-virtio-bindings.py --component NativeRamBlock --directory build/native-ram-block",
+    "build-native-aes-bindings.py",
   "build-mockfs-fixture.py",
 ]
 
