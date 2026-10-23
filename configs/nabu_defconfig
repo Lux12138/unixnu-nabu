@@ -20,3 +20,6 @@ CONFIG_XNU_NATIVE_UFS=y
 # BootProgress.c (82 KB plus probes) and has no builder in this tree yet.
 CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
 CONFIG_XNU_OWNER_ROOT_AUDIT=y
+
+# NativeVirtioBlock refuses to build without the qualified NativeAES baseline.
+CONFIG_XNU_NATIVE_AES=y
