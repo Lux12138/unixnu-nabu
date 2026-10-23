@@ -117,15 +117,21 @@ jobs:
       # The reference checkout has to live outside out/nabu/tree: unixnu tree rebuilds that
       # directory, and a foreign directory inside it made the build fail with
       #   PermissionError: Operation not permitted: .../tree/refer/IOStorageFamily
+      # The audit script resolves ROOT as parents[1] of its own path. Inside the build tree it
+      # is linked to out/nabu/tree/scripts/, so it reads out/nabu/tree/refer/IOStorageFamily;
+      # invoked from the device repository it reads UniXNU/refer/IOStorageFamily. Put a checkout
+      # in both places rather than guessing which one runs.
       - name: Fetch IOStorageFamily (public Apple Darwin 23 source)
         run: |
-          cd UniXNU
-          mkdir -p refer
-          if [ ! -d refer/IOStorageFamily/.git ]; then
-            git clone --filter=blob:none https://github.com/apple-oss-distributions/IOStorageFamily.git refer/IOStorageFamily
-          fi
-          git -C refer/IOStorageFamily checkout -q e45fbe30a7879e0b16e26dddb78538f1b00e0bff
-          echo "IOStorageFamily HEAD: $(git -C refer/IOStorageFamily rev-parse HEAD)"
+          mkdir -p UniXNU/refer UniXNU/out/nabu/tree/refer
+          for dir in UniXNU/refer/IOStorageFamily UniXNU/out/nabu/tree/refer/IOStorageFamily; do
+            if [ ! -d "$dir/.git" ]; then
+              rm -rf "$dir"
+              git clone --filter=blob:none https://github.com/apple-oss-distributions/IOStorageFamily.git "$dir"
+            fi
+            git -C "$dir" checkout -q e45fbe30a7879e0b16e26dddb78538f1b00e0bff
+            echo "$dir HEAD: $(git -C "$dir" rev-parse HEAD)"
+          done
 
       # The kernel build is 8 of the 9 minutes. Reusing the object tree turns a full
       # rebuild into an incremental one, which is the only lever available without a macOS
