@@ -70,7 +70,10 @@ packed_data_ramdisk = true
 # extra system content from, not the root itself.
 root_match_volume_uuid = "04769d26-2ca0-4825-b443-e2e5f88300f2"
 ipad_identity = true
-unique_chip_id = "required"          # the platform seed is not stored in any repository
+# The existing, booting payload carries no /chosen/unique-chip-id, and make-nabu-adt.py only
+# accepts the pair together (--unique-chip-id with --chip-id). So the seed is not required here;
+# asking for it only blocks a path that never needed it.
+unique_chip_id = false
 
 [userdata]
 # Measured 2026-10-20 via TWRP sysfs (device has an upgraded/larger UFS):
