@@ -548,6 +548,46 @@ fastboot flash userdata out/nabu/userdata/userdata-root.img
 
 
 
+
+> ### 里程碑：UFS 命令链全通（host:lun）
+>
+> ```
+> host:lun            ← NOP OUT → 电源查询 → START STOP UNIT 唤醒 → LUN ready 轮询
+> ufs:entered
+> prep:attach-done
+> start:ok
+> media:no-uuid
+> walk5
+> guard2
+> IOFindBSDRoot entered
+> A call wfs
+> ```
+>
+> 之前一直停在 `host:nop`，看起来像「设备不响应 NOP」。换成 timer-free 自旋后整条命令链一次走通，
+> 说明设备一直响应良好 —— 卡住的是 `IODelay` 本身。
+>
+> 至此 UFS 侧完整可用：控制器接管 → 命令通路 → 窗口发布（walk5）→ `start:ok`。
+>
+> ### 仍在确认的一件事：时基是否前进
+>
+> `tA = 3967735401` 证明 `mach_absolute_time()` 返回非零，但差值那行始终空白 —— 改成字面字符串
+> （`clock:advances` / `clock:STUCK`）以排除数字渲染路径的影响。
+>
+> 这个答案决定下一步方向：
+>
+> | 结果 | 含义 | 下一步 |
+> |---|---|---|
+> | `clock:advances` | 时基正常 | `waitForService` 卡在中断/调度器没有推进，去查计时器中断与 `gPicBase` 接线 |
+> | `clock:STUCK` | 时基冻结 | `CNTPCT`/`CNTFRQ` 未编程；修好它可一次性解决 `IOSleep`/`IODelay`/`inittodr`/所有 IOKit 超时 |
+>
+> ### 验证工具的坑（今晚踩了两次）
+>
+> `strings` 默认只输出 ≥4 字符的字符串。探针标签 `tA` / `tD` 只有 2 个字符，于是「内核里没有探针」
+> 的错误结论出现两次，白跑了两轮构建。**查 2 字符探针必须用 `strings -n 2`。**
+>
+> 另外 `nabu_mark_text` 每行清 61px，标记行距必须 ≥ 61px（现用 80px），否则相邻标记互相擦除 ——
+> 这也是 `tD` 一开始看不见的原因之一。
+
 > ### 里程碑：块设备完整发布（walk 3 → 5）
 >
 > ```
