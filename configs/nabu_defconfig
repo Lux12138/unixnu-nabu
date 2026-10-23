@@ -9,12 +9,13 @@ CONFIG_XNU_DT_PANIC_REGION=y
 CONFIG_XNU_SOURCE_CORECRYPTO14=y
 CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
 CONFIG_XNU_OWNER_DATA_VOLUME_UUID="BEC2158A-350E-4F2E-B87E-A0E69FB0BDEA"
-# CONFIG_XNU_NATIVE_UFS is off while the boot is being brought up. Enabling it
-# links build/storage-abi/IOBlockStorageDevice-reference.o into the kernel so that
-# NativeUfsBlock can derive from IOBlockStorageDevice, but prelink also packs
-# com.apple.iokit.IOStorageFamily, which owns that class. OSMetaClass then panics:
-#   Kext com.apple.iokit.IOStorageFamily class IOBlockStorageDevice is a duplicate;
-#   kext __kernel__ already has a class with this name
-# Storage is not needed this early; re-enable it once the kernel reaches userland.
-# CONFIG_XNU_NATIVE_UFS=y
+CONFIG_XNU_NATIVE_UFS=y
 
+# The documented diagnostic page: boot-progress=1 freezes a 48x120 text overlay
+# after 30 s without progress, boot-progress=2 runs it continuously. Reports time,
+# idle, IRQ count, root state, free pages, last interrupt-entry PC and TCR/TTBR/SCTLR.
+# The build refuses it unless the audited UFS/owner-root, virtio and source
+# corecrypto switches are also on.
+CONFIG_XNU_BOOT_PROGRESS=y
+CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
+CONFIG_XNU_OWNER_ROOT_AUDIT=y
