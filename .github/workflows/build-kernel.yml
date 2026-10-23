@@ -43,11 +43,10 @@ jobs:
 
       - name: Clone UniXNU
         run: |
-          # The previous source, Lux12138/UniXNU, had fallen 163 commits behind upstream.
-          # None of this port's work lives in that tree -- every nabu change is in this device
-          # repository -- so tracking upstream is safe and brings the newer build payload and
-          # bootimg commands, the boot progress implementation, and current driver pointers.
-          git clone --recurse-submodules --depth 1 --shallow-submodules https://github.com/UniXNU/UniXNU.git UniXNU
+          # Upstream UniXNU was tried and rejected: its newer MIG path passes -mach_msg2 to
+          # clang, and xnu-10063 needs the oldest iig behaviour or the reply-size metadata is
+          # wrong and mig_init() trips. This snapshot is the tree the kernel actually builds on.
+          git clone --recurse-submodules --depth 1 --shallow-submodules https://github.com/Lux12138/UniXNU.git UniXNU
 
       - name: Select defconfig
         run: |
