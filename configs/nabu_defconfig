@@ -9,7 +9,6 @@ CONFIG_XNU_DT_PANIC_REGION=y
 CONFIG_XNU_SOURCE_CORECRYPTO14=y
 CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
 CONFIG_XNU_OWNER_DATA_VOLUME_UUID="BEC2158A-350E-4F2E-B87E-A0E69FB0BDEA"
-CONFIG_XNU_NATIVE_UFS=y
 
 # The documented diagnostic page: boot-progress=1 freezes a 48x120 text overlay
 # after 30 s without progress, boot-progress=2 runs it continuously. Reports time,
@@ -18,37 +17,17 @@ CONFIG_XNU_NATIVE_UFS=y
 # corecrypto switches are also on.
 # CONFIG_XNU_BOOT_PROGRESS is not set -- the diagnostic page lives in kits/sheng/
 # BootProgress.c (82 KB plus probes) and has no builder in this tree yet.
-CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
-CONFIG_XNU_OWNER_ROOT_AUDIT=y
 
 # NativeVirtioBlock refuses to build without the qualified NativeAES baseline.
-CONFIG_XNU_NATIVE_AES=y
 
 # --- storage and integrity baseline (mirrors sheng_defconfig) -------------------
 # The kernel scripts gate several options on these being present together; NativeAES in
 # particular refuses to build without the qualified original AES/crypto prelink closure.
-CONFIG_XNU_BUILD_ARCHIVES=y
-CONFIG_XNU_NATIVE_RAM_BLOCK=y
-CONFIG_XNU_TRUST_CACHE_RUNTIME=y
-CONFIG_XNU_NATIVE_CS_HASH_CACHE=y
 
 # mockfs supplied from source rather than only as an archive target.
-CONFIG_XNU_SOURCE_MOCKFS=y
 
 # Verified-root probe and the owner-root trust/mount chain.
-CONFIG_XNU_VERIFIED_ROOT_PROBE=y
-CONFIG_XNU_OWNER_ROOT_TRUST=y
-CONFIG_XNU_OWNER_CACHE_MOUNT=y
-CONFIG_XNU_OWNER_CACHE_STARTUP=y
-CONFIG_XNU_OWNER_BOOT_MANIFEST=y
-CONFIG_XNU_OWNER_DATA_MOUNT=y
-CONFIG_XNU_OWNER_UNION_SYSTEMOS=y
 
 # Archive paths the baseline expects. {tree} expands to the build tree.
-CONFIG_XNU_NATIVE_VIRTIO_BLOCK_ARCHIVE="{tree}/build/native-virtio-block-verified-bundle/libNativeVirtioBlock.a"
-CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-os-xnu-bundle/libVerifiedRootProbe.a"
-CONFIG_XNU_EXTRA_LD_ARCHIVES=""
 
 # nabu is not armvirt and has no mobile display provider yet.
-CONFIG_XNU_ARMVIRT_PLATFORM=n
-CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
