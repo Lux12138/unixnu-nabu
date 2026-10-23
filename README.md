@@ -1,18 +1,62 @@
 # UniXNU on Xiaomi Pad 5 (nabu / SM8150)
 
-在**小米平板 5（nabu，骁龙860 / SM8150）**上通过 UEFI 启动 **苹果 XNU 内核** 的完整移植记录。
+在 **小米平板 5（nabu，骁龙 860 / SM8150）** 上通过 UEFI 启动 **苹果 XNU 内核** 的完整移植记录。
 
-> 状态：**内核已真正进入执行**（`DARWINBOOT: hand-off to the kernel` / 绿色 XNU 画面）。
-> 下一步是 PMGR 电源管理框架，才能走到 IPSW userspace。
+> **本机是扩容版**：物理 DRAM **12 GiB**（TWRP 实测 `MemTotal = 11766512 kB`，
+> 即 12 GiB 减去约 816 MB 给 modem/hyp/rmtfs），userdata **约 468 GiB**
+> （`fastboot partition-size:userdata = 0x74167BB000`）。
+> 所以 `dram_size = 0x300000000` 是**为这台机器测出来的**，不是标准 6/8 GB 机型的数字。
+
+> **状态**：**内核已经执行到 `execve("/sbin/launchd")`**
+> （`Process 1 exec of /sbin/launchd failed, errno 2`）。
+> 内核侧全部通过，现在缺的是一个装了系统文件的根文件系统。
 
 ---
 
-## 一、成果（全部真机验证）
+## 一、里程碑：内核走到了 launchd
+
+**屏幕证据**
 
 ```
-fastboot boot → Mu UEFI → UniXNU 菜单 → cust 分区 payload
-→ DarwinBoot → 读 51MB 内核 → 解析 Mach-O → ADT 校验
-→ 分配窗口 → 映射段 → ExitBootServices → 跳转 XNU → 内核执行 ✅
+Process 1 exec of /sbin/launchd failed, errno 2
+/sbin/launchd
+kern_exec.c
+
+FAR=18446744042837921792
+PC=18446744005117767160
+LR=18446744005111703156
+```
+
+**完整链路**
+
+```
+bsd_autoconf()                            OK
+  kminit()                                OK
+    IOsurfaceRoot::installMemoryRegions() OK   <- 曾被误认为卡在这里
+bsd_init 后半段                           OK
+  vfs_mountroot()                         OK
+  load_init_program()                     OK   <- 解析出 /sbin/launchd
+    execve("/sbin/launchd")               errno 2 (ENOENT)
+```
+
+**`errno 2` 是文件不存在，不是内核故障。**
+
+### 曾经误判了三天
+
+`IOsurfaceRoot::installMemoryRegions()` 那一行**从来不是终点，只是最后一条 kprintf**。
+它之后的 `dtrace_postinit()`、`inittodr()`、条件编译的网络初始化**全都不打日志**，
+于是「日志停止」被读成了「内核停止」。
+
+真正缺的一直是一个根文件系统。
+
+---
+
+## 二、启动链（真机验证）
+
+```
+fastboot boot -> Mu UEFI -> UniXNU 菜单 -> cust 分区 payload
+-> DarwinBoot -> 读 51MB 内核 -> 解析 Mach-O -> ADT 校验
+-> 分配窗口 -> 映射段 -> ExitBootServices -> 跳转 XNU -> 内核执行
 ```
 
 关键日志：
@@ -33,26 +77,107 @@ DARWINBOOT: hand-off to the kernel
 
 ---
 
-## 二、六个硬坑与解法（照这个顺序踩，能省几天）
+## 三、本地 Linux 构建（72 秒一轮）
+
+内核现在能在本地 WSL Ubuntu 24.04 上编译，**72 秒**一轮，对照 GitHub macOS runner 的 15–17 分钟。
+
+| 项 | GitHub macOS runner | 本地 WSL Ubuntu |
+|---|---|---|
+| 单轮构建 | 15–17 分钟 | **72 秒** |
+| 产物 | 49.2 MB | **49 MB** |
+| 可复现 | 只能靠 CI | 本机随时跑 |
+
+**产物验证**
+
+```
+file            Mach-O 64-bit arm64 executable, flags:<NOUNDEFS|PIE>
+__TEXT vmaddr   0xfffffff007004000      与原版 kernelcache 一致
+symbols         22708
+nabu 探针       nabu_mark / nabu_mark_map / nabu_mark_num / nabu_mark_putc
+UFS 探测        nabu_ufs_register_probe.cpp
+sha256          c756ecdb88a9dd50156dc27d2cdf48a08ddf93fcf204040fa57804f814fc3c15
+```
+
+工具链来自 [`Allenwdk/xnu-linux-toolchain`](https://github.com/Allenwdk/xnu-linux-toolchain)。
+
+### 打通 Linux 时踩的 18 个坑
+
+| 类别 | 数量 | 例子 |
+|---|---|---|
+| 工具链缺失 | 8 | `libdispatch` 无 Ubuntu 包；`hostcompat.h` / `libc.h` / `copyfile.h` / `setmode` 全需自写 |
+| 路径硬编码 | 5 | `/usr/bin/xcrun`、`/usr/sbin/sysctl`、`compression_tool`、`dsymutil`、`lzfse` |
+| BSD vs GNU | 3 | `sed -i ''`、`awk \(`、未知 `-Wno-*` |
+| 逻辑冲突 | 2 | mockfs 双重链接（23 个重复符号）、`TargetConditionals.h` 重复 |
+
+**最有价值的一个**：`makesyscalls.sh` 里 `printf("\t{ \(sy_call_t *\)...")` ——
+**BSD awk 把 `\(` 当转义，gawk 保留反斜杠**，Linux 上生成的 `init_sysent.c` 全是
+`\(sy_call_t *\)`，编译器报一片 `expected expression`。做成 patch（`zzzz-nabu-awk-parens.patch`），
+因为 `unixnu tree` 每次都重建 `.cache`，手工改会被覆盖。
+
+---
+
+## 四、根文件系统：7-Zip 直接解，不用 hdiutil
+
+`build userdata` 在 Linux 上卡在 `hdiutil`。不用自己写 UDIF 解析器 ——
+**7-Zip 23.01 原生支持 DMG + LZFSE**，直接解出完整 iOS 文件系统：
+
+```bash
+sudo apt-get install -y p7zip-full
+7z x -y -o/tmp/dmgout 044-76040-038.dmg
+```
+
+实测结果：
+
+```
+/sbin/launchd   561,856 bytes   Mach-O 64-bit arm64 executable
+                               flags:<NOUNDEFS|DYLDLINK|TWOLEVEL|PIE>
+
+9.7 GB / 210,828 个文件
+  8.1G  System
+  713M  usr
+  483M  private
+  313M  Applications
+  139M  Library
+  960K  sbin
+```
+
+**注意**：`dmg2img 1.6.7` **不支持 LZFSE**，会报
+`Unsupported or corrupted block found: -2147483641` 并输出残像。用 7-Zip。
+
+`7z l -slt` 能直接看出压缩方式：
+
+```
+Method = Copy Zero2 LZFSE CRC
+Path   = 3.apfs
+Size   = 6077546496         5.66 GiB
+Type   = APFS
+Name   = DawnUpdate21H461.J120J121J207J208OS.apfs
+num_files: 165509
+```
+
+---
+
+## 五、六道硬坑与解法（照这个顺序踩，能省几天）
 
 ### 坑 1：`fastboot boot` 报 `Failed to load/authenticate boot image: Load Error`
 
 **不是** 官改 ABL 禁用 boot，**是 USB 线**。
-- 劣质充电线会让 96MB 级镜像传输丢数据 → ABL 校验失败
+
+- 劣质充电线会让 96MB 级镜像传输丢数据 -> ABL 校验失败
 - 换原装数据线 + 插主板后面板 USB 口后，同一镜像立刻 `Booting OKAY`
 
 ### 坑 2：ramdisk 大小有上下限
 
 | ramdisk | ABL | UEFI |
 |---|---|---|
-| 16 MB | ❌ Load Error | — |
-| 32 MB | ✅ | ✅ 菜单正常 |
-| 64 MB | ✅ | ✅ 菜单正常 |
-| 96 MB | ✅ | ❌ 黑屏 |
+| 16 MB | Load Error | — |
+| 32 MB | OK | 菜单正常 |
+| 64 MB | OK | 菜单正常 |
+| 96 MB | OK | 黑屏 |
 
-→ **可用区间 32–64MB**；`header_version = 1`，`page_size 2048`。
+可用区间 **32–64MB**；`header_version = 1`，`page_size 2048`。
 
-### 坑 3：设置 `fastboot boot` 前先重启设备
+### 坑 3：`fastboot boot` 前先重启设备
 
 设备每次重启后**第一次 boot 成功率最高**；连续 boot 会出现 Load Error（download buffer 状态残留）。
 
@@ -60,171 +185,55 @@ DARWINBOOT: hand-off to the kernel
 
 | FVMAIN 大小 | 结果 |
 |---|---|
-| 8 MB（原始） | ✅ 固件正常 |
-| 62 MB（未压缩内核） | ❌ 回 fastboot |
-| 15 MB（LZMA 压缩内核） | ❌ 回 fastboot |
+| 8 MB（原始） | 固件正常 |
+| 62 MB（未压缩内核） | 回 fastboot |
+| 15 MB（LZMA 压缩内核） | 回 fastboot |
 
-→ **FVMAIN 上限约 8–10MB**；FD 本体也有上限（3MB 可用，32/60MB 全废）。
-结论：**内核不能走 boot.img 内核段，只能走存储**。
+FVMAIN 上限约 8–10MB；FD 本身也有上限。**内核不能走 boot.img 内核段，只能走存储。**
 
-### 坑 5：没有任何 FAT 卷（最根本的一个）
+### 坑 5：没有任何 FAT 盘（最根本的一个）
 
 固件其实自带完整存储栈（`UFSDxe` / `PartitionDxe` / `DiskIoDxe` / `Fat`），
-但安卓分区全是 ext4/f2fs → UniXNU 枚举不到任何带 `unixnu.toml` 的卷
-→ `Config->Volume = NULL` → DarwinBoot 报 `NULL input`。
+但安卓分区全是 ext4/f2fs，UniXNU 枚举不到任何带 `unixnu.toml` 的卷。
 
-**解法：把 payload 写进一个真实 FAT 分区**
-
-```bash
-# cust 分区 1GB（0x40000000），小米出厂资源分区，格式化不影响系统启动
-fastboot getvar partition-size:cust
-fastboot flash cust cust-payload.img      # 64MB FAT，见 scripts/make-cust-payload.sh
-```
-
-FAT 内容：
+### 坑 6：ADT 里的 DRAM 必须是实测值
 
 ```
-\EFI\UniXNU\unixnu.toml
-\EFI\UniXNU\Payloads\kernel.macho        (51MB，含 NativeUfs)
-\EFI\UniXNU\Payloads\kernel.macho.adt    (13KB)
+dram-size               = 0x300000000   12 GiB（本机扩容）
+darwinboot-memory-size  = 0x20000000    512 MiB 连续窗口
 ```
 
-> ⚠️ `fastboot flash` 前务必确认镜像大小完整（`Sending 'cust' (65536 KB)`）；
-> 拷贝被截断会表现为 `config error: unixnu.toml line 1: expected '='`。
-
-### 坑 6：DarwinBoot 驱动不被 dispatch
-
-`LocateProtocol(gUniXNULoaderProtocolGuid)` 返回 `Not Found`，`Boot()` 一行都不执行
-（所有 DarwinBoot 补丁"加了没反应"的元凶）。
-
-- fdf 里有 `INF`、FV 里有 FFS、`.inf` 无 Depex 残留、全量 `ConnectController` 都无效
-- **解法：并入 `Platforms/Xiaomi/nabuPkg/Include/APRIORI.inc` 的第一个 `APRIORI DXE` 块**
-
-```
-APRIORI DXE {
-  ...
-  INF DarwinBootPkg/Driver/DarwinBoot.inf     # ← 放这里
-}
-```
-
-### 坑 7（收尾）：ADT 带 RAMDisk 占位符但没提供 initrd
-
-DarwinBoot 源码：
-
-```c
-if (Request->Ramdisk != NULL) { ... }
-else if (RamdiskOffset != MAX_UINTN) {
-    Status = EFI_UNSUPPORTED;   // ← 之前就是卡在这
-    goto Fail;
-}
-```
-
-`DB4 adt ok ... rd=2400` 说明 ADT 里有 RAMDisk 节点，但配置没有 `initrd`。
-**解法：生成 ADT 时不要 `--data-ramdisk` / `--packed-data-ramdisk`**，这样
-`rd=ffffffffffffffff`，检查通过。
+`darwinboot-memory-size` 是 DarwinBoot 向固件要的一块**连续**物理内存。
+512 MiB 足够；更大的值更难从 `EfiConventionalMemory` 里找到连续区间。
 
 ---
 
-## 三、复现步骤
+## 六、下一步
 
-### 1. 编译内核（GitHub Actions `macos-14`）
-
-仓库 `Lux12138/UniXNU` 的 workflows 会产出 `kernel.macho`（51.27MB，含 `NativeUfs`）。
-关键点：prelink 阶段需要 `build/storage-abi/IOBlockStorageDevice-reference.o` 与
-VerifiedRoot stub，否则 `IOBlockStorageDevice::*` / `_vr_open` 一堆 undefined。
-
-### 2. 生成 ADT（**不要** RAMDisk 占位符）
+**唯一缺的是把解出来的根做成一个能挂的卷。**
 
 ```bash
-python3 UniXNU/scripts/make-nabu-adt.py \
-  --dram-size 0x300000000 \
-  --owned-memory-size 0x130000000 \
-  --cpu-regs "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700" \
-  --ipad-identity \
-  --chip-id 0x207 \
-  --unique-chip-id 0x0000000000000001 \
-  --output kernel.macho.adt
+./unixnu ipsw fetch OS Cryptex1,SystemOS      # 已下好：OS 4.80 GiB + SystemOS 3.08 GiB
+7z x -y -o/tmp/dmgout out/ipsw/21H461/044-76040-038.dmg
+./unixnu build userdata                       # SHNGROOT manifest + 两个窗口
+fastboot flash userdata out/nabu/userdata/userdata-root.img
 ```
 
-### 3. 做 cust payload 镜像并刷入
+`[userdata]` 几何（TWRP 实测）：
 
-```bash
-bash scripts/make-cust-payload.sh     # 产出 cust-payload.img (64MB FAT)
-fastboot flash cust cust-payload.img
+```
+first_lba = 0x288C40     2,654,272    (4 KiB LBA)
+last_lba  = 0x77BF3FA    125,436,922
+lba_bytes = 4096
+windows   = [OS, SystemOS]
 ```
 
-### 4. 组装 UEFI（Mu-Silicium + UniXNU）
-
-```bash
-python3 build_uefi.py -d nabu -r DEBUG
-```
-
-需要以下固件改动（见 `docs/firmware-patches.md`）：
-- `[uefi_fd] size = 0x300000`（保持 3MB）
-- fdf 里**移除**内嵌的 `unixnu.toml`（`FILE RAW = 7D9C9E2A-...`），改从 cust 分区读
-- fdf 里**保留** `INF DarwinBootPkg/Driver/DarwinBoot.inf`
-- `Include/APRIORI.inc` 第一段 `APRIORI DXE` 块加入 DarwinBoot
-
-### 5. 启动
-
-```bash
-fastboot boot nabu-xnu.img     # boot.img = BootShim + FD(3MB) + 64MB ramdisk
-```
+**不再是编译问题，不再是驱动问题，是数据问题。**
 
 ---
 
-## 四、硬件数据（实测，勿用厂商默认值）
+## 七、参考
 
-| 项目 | 值 | 来源 |
-|---|---|---|
-| DRAM | 12 GiB（`MemTotal 11766512 kB`） | TWRP |
-| userdata 起始 | `21234176` × 512B = `0x288C40` | `/sys/block/sda/sda31/start` |
-| userdata 结束 | `0x77BF3FA`，LBA 4096 | 同上 |
-| GIC_DIST / REDIST | `0x17a00000` / `0x17a60000` | SM8150 |
-| UFS HC | `0x1d84000` | SM8150 |
-| 时间基准 | 19200000 Hz | 实测 |
-| IPCC / cmd-db / SPMI | `0x17c00000` / `0x85f20000` / `0x0c440000` | SM8150 |
-| cust 分区 | `0x40000000`（1GB） | `fastboot getvar` |
-
----
-
-## 五、下一步
-
-> **当前第一嫌疑：起始异常级别不匹配。**
-> 实测 DarwinBoot 在 **EL1** 交付内核（探针 `EL=4`），而苹果真实链路是
-> **iBoot 在 EL2 交付、XNU 自己降到 EL1**。若内核早期访问 EL2 系统寄存器
-> 就会静默 fault —— 这与"视频参数已正确、内核却一个字都不打印"完全吻合。
-> 详见 `docs/early-console-plan.md` 末尾的实测进展。
-
-
-> 顺序：先做**早期 console 走帧缓冲**（`docs/early-console-plan.md`），
-> 拿到屏幕上的 panic 输出；再做 PMGR（`docs/pmgr-plan.md`）。
-
-
-> 参见 `docs/prior-art-0xDive-ios-nabu.md`：同类项目的路线对比，
-> 以及可借鉴的 nabu 公共 DTS / USB-PHY 参数。
-
-
-内核已进入执行，会在极早期 panic —— 这是**预期**的：XNU 需要苹果的电源管理框架。
-
-1. **PMGR**：`NabuPlatformPower.cpp`（164 个 vtable slot），SM8150 侧是
-   IPCC / cmd-db / SPMI / RPMh（消息式，不是 MMIO）
-2. 反查 `ApplePMGR` 的 `readAon()`(slot 320) / `writeAon(uint64_t)`(slot 321) 语义
-3. 其余驱动：`NativeRamBlock`、`NativeVirtioBlock`、`NativeHidInput`、
-   `NativeLegacyDisplay`、`NativeAdreno`
-4. 先抓 panic 日志（屏幕上会显示；或接 UART 115200 拿完整 log），那就是 PMGR 的路线图
-
----
-
-## 六、工具与环境
-
-- WSL2 Ubuntu 24.04：`/root/Mu-Silicium`（EDK2/Mu UEFI）、`/root/UniXNU`（上游）
-- `nabu` 包根：`Silicium-ACPI/Platforms/Xiaomi/nabu/`（**不是** `nabuPkg`，后者只有空 dec）
-- Windows：`C:\platform-tools`（fastboot/adb）、`C:\Users\Administrator\.dsh-tools\PortableGit`
-- 构建产物：`C:\Users\Administrator\Desktop\unixnu-nabu-kernel-ufs\`
-
-## 七、安全提醒
-
-- **全程只用 `fastboot boot`，不刷 `abl` / `xbl` / `bootloader`**（唯一写操作是把 payload 写进 `cust`）
-- `cust` 是出厂资源分区，格式化只丢出厂资源，系统可正常启动
-- 任何时刻长按电源键 10 秒可强制重启恢复
+- [`Allenwdk/xnu-linux-toolchain`](https://github.com/Allenwdk/xnu-linux-toolchain) —— Linux 交叉工具链
+- [`1PJL/unixnu-nabu`](https://github.com/1PJL/unixnu-nabu) —— UFS 卷诊断系列（`Recover GPT` / `Build Volume` / `Repack` 三步，跑在 `ubuntu-24.04` 上）
+- `UniXNU` 上游 —— 内核移植与 UEFI 启动链
