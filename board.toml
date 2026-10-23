@@ -60,12 +60,18 @@ tool = "scripts/make-nabu-adt.py"
 # Measured 2026-10-20 via TWRP: /proc/meminfo MemTotal = 11766512 kB
 # (12 GiB = 12582912 kB minus ~816 MB reserved for modem/hyp/rmtfs) => physical 12 GiB.
 # darwinboot-memory-size: the contiguous window DarwinBoot asks the firmware for.
-# 512 MiB is the value 1PJL's working nabu payload uses, and a smaller window is easier to
-# allocate contiguously in EfiConventionalMemory than 4.75 GiB was.
-owned_memory_size = "0x20000000"
+# 0x130000000 (4.75 GiB) is what this machine booted with when the kernel reached
+# execve(launchd). Dropping it to 0x20000000 (512 MiB) -- the value 1PJL uses on a 6 GiB
+# handset -- made the boot stall inside kminit(), at
+# IOsurfaceRoot::installMemoryRegions(), which allocates from this window.
+# make-nabu-adt.py accepts up to 0x200000000 (8 GiB).
+owned_memory_size = "0x130000000"
 dram_size = "0x300000000"
 cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"
-packed_data_ramdisk = true
+# false selects make-nabu-adt.py's --data-ramdisk, which writes the memory-map node named
+# "RAMDisk". true writes "PackedRAMDisk" instead, and DarwinBoot rejects that pairing with
+# "Compromised Data" at the menu -- which is exactly what happened before this was corrected.
+packed_data_ramdisk = false
 # /chosen/root-matching: XNU selects the IOMedia whose UUID matches this string.
 # This is the OS volume from 044-76040-038.dmg -- the one that carries /sbin/launchd.
 # Read out of 7z l -slt: vol_uuid 04769d262ca04825b443e2e5f88300f2.
