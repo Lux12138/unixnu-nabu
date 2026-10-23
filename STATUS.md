@@ -1,5 +1,11 @@
 # 状态快照
 
+> 本机是 **扩容版 nabu**：物理 DRAM **12 GiB**，实测自 TWRP 的 `/proc/meminfo`
+> （`MemTotal = 11766512 kB`，即 12 GiB 减去约 816 MB 给 modem/hyp/rmtfs）。
+> 因此 `dram_size = 0x300000000`、`owned_memory_size = 0x130000000` 是**为这台机器测出来的值**，
+> 不是标准 6/8 GB 机型上的数字。照抄其他项目的 `0x180000000`（6 GiB）会让 6 GiB 以上的
+> 物理内存对 Darwin 不可见。
+
 ## 里程碑：内核走到了 launchd
 
 **屏幕证据（2026-10-23 晚）**
@@ -28,7 +34,7 @@ bsd_init 后半段       ✅
 
 **`errno 2` 是文件不存在 —— 不是内核问题，是根文件系统里没有那个文件。**
 
-### 这推翻了之前三个月的判断
+### 这推翻了三天来的判断
 
 `IOsurfaceRoot::installMemoryRegions()` 那一行**从来不是终点**，它只是最后一条 kprintf。
 它之后紧接的 `dtrace_postinit()`、`inittodr()` 和条件编译的网络初始化都不打日志，所以
