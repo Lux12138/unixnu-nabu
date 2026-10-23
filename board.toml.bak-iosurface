@@ -1,0 +1,142 @@
+# UniXNU device repo for Xiaomi Pad 5 (nabu)
+# Only the kernel build path is configured; userdata geometry needs on-device measurement.
+
+[board]
+name = "nabu"
+soc = "SM8150"
+description = "Xiaomi Pad 5"
+kit = "nabu"
+
+[ipsw]
+url = "https://updates.cdn-apple.com/2025SpringFCS/fullrestores/122-77166/DCA6CFE8-90E9-4B92-880D-3DE171798E40/iPad_Pro_HFR_17.7.11_21H461_Restore.ipsw"
+product = "iPad7,1"
+version = "17.7.11"
+build = "21H461"
+device_class = "j120ap"
+chip_id = 0x8011
+board_id = 12
+# OS and Cryptex1,SystemOS are the two windows the userdata image is built from: the
+# userdata step copies them byte for byte behind the SHNGROOT manifest. Without them
+# `unixnu build userdata` has nothing to lay out, and the kernel has no root to mount.
+fetch = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustCache",
+         "OS", "Cryptex1,SystemOS"]
+
+[ipsw.sha256]
+"044-76040-038.dmg" = "3f99b859c9728379110b66657c7b15285bcb1925ad8b5726542e2cdcf8b1028d"
+"044-76034-038.dmg" = "b4908cde41d23e6bc05e6af51a2c9eeb00cf0f863a6a18b1600c96a3fd70414f"
+
+[kernel]
+defconfig = "nabu_defconfig"
+# Archive builders run in order before the kernel link.
+# build-arm-driver.py is absent from the main branch, and libpthread needs link.filelist
+# which a bootstrap pass never reaches, so only corecrypto is built here.
+archives = [
+    "build-corecrypto-14.py",
+    "build-corecrypto-14.py --namespace",
+    "build-arm-driver.py ArmDTPlatform",
+    "build-arm-driver.py ArmCpu",
+    "build-arm-driver.py NativeAES",
+    "build-native-aes-bindings.py",
+    # Public IOStorageFamily headers for the built-in block drivers. audit-storage-interface.py
+    # does this too but additionally wants a live guest snapshot we cannot produce.
+    "prepare-storage-headers.py",
+    # --unverified is the bring-up mode: adopt the running controller without the verified-root
+    # policy bundle.
+    "build-arm-driver.py NativeUfs --unverified",
+    # "build-ufs-original-bindings.py",  # only with the real NativeUfs block class
+    "build-arm-driver.py NativeRamBlock",
+    # Redundant with CONFIG_XNU_SOURCE_MOCKFS=y: the built-in objects and this archive
+    # define the same 23 symbols, and the link reports them as duplicates.
+    # "build-mockfs-fixture.py",
+    "build-libpthread-kernel.py",
+  ]
+
+[payload.adt]
+tool = "scripts/make-nabu-adt.py"
+# chip_id is deliberately absent. make-nabu-adt.py only accepts --unique-chip-id together with
+# --chip-id, and the payload that boots today carries neither, so supplying chip_id alone fails:
+#   error: --unique-chip-id and --chip-id must be supplied together
+# The ADT identifies the platform through arm-io/product, not through a chip id.
+# Measured 2026-10-20 via TWRP: /proc/meminfo MemTotal = 11766512 kB
+# (12 GiB = 12582912 kB minus ~816 MB reserved for modem/hyp/rmtfs) => physical 12 GiB.
+# darwinboot-memory-size: the contiguous window DarwinBoot asks the firmware for.
+# 0x130000000 (4.75 GiB) is what this machine booted with when the kernel reached
+# execve(launchd). Dropping it to 0x20000000 (512 MiB) -- the value 1PJL uses on a 6 GiB
+# handset -- made the boot stall inside kminit(), at
+# IOsurfaceRoot::installMemoryRegions(), which allocates from this window.
+# make-nabu-adt.py accepts up to 0x200000000 (8 GiB).
+owned_memory_size = "0x130000000"
+dram_size = "0x300000000"
+cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"
+# false selects make-nabu-adt.py's --data-ramdisk, which writes the memory-map node named
+# "RAMDisk". true writes "PackedRAMDisk" instead, and DarwinBoot rejects that pairing with
+# "Compromised Data" at the menu -- which is exactly what happened before this was corrected.
+packed_data_ramdisk = false
+# /chosen/root-matching: XNU selects the IOMedia whose UUID matches this string.
+# This is the OS volume from 044-76040-038.dmg -- the one that carries /sbin/launchd.
+# Read out of 7z l -slt: vol_uuid 04769d262ca04825b443e2e5f88300f2.
+# SystemOS is 8846fe7829104297af97d59bb6f8fc16; it is the cryptex the OS volume draws
+# extra system content from, not the root itself.
+root_match_volume_uuid = "04769d26-2ca0-4825-b443-e2e5f88300f2"
+ipad_identity = true
+# The existing, booting payload carries no /chosen/unique-chip-id, and make-nabu-adt.py only
+# accepts the pair together (--unique-chip-id with --chip-id). So the seed is not required here;
+# asking for it only blocks a path that never needed it.
+unique_chip_id = false
+
+[userdata]
+# Measured 2026-10-20 via TWRP sysfs (device has an upgraded/larger UFS):
+#   /sys/block/sda/sda31 (userdata) start = 21234176 sectors of 512 bytes
+#   -> first_lba = 21234176 / 8 = 2654272 = 0x288C40   (UFS LBA is 4096 bytes)
+#   size = 973815256 sectors -> 121726907 LBA = 0x74167BB
+#   -> last_lba = first_lba + 121726907 - 1 = 124381178 = 0x77BF3FA
+# Cross-checked against fastboot partition-size:userdata = 0x74167BB000 bytes (matches).
+first_lba = 0x288C40
+last_lba = 0x77BF3FA
+lba_bytes = 4096
+windows = [
+  { name = "OS", component = "OS" },
+  { name = "SystemOS", component = "Cryptex1,SystemOS" },
+]
+
+[kernel.prelink]
+tool = "kits/NativePrelink/emit_prelink.py"
+kernel = "build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837.unstripped.noctf"
+kernelcache_sha256 = "f18b4df865405f2a287b84977d7aca745e056d656d9fc9df1662970ce2969de7"
+slide = "-0x1000000"
+early_security_init = "com.apple.driver.AppleMobileFileIntegrity=0xfffffff005ab4ae0"
+roots = [
+    "com.apple.AppleFSCompression.AppleFSCompressionTypeZlib",
+    "com.apple.driver.AppleARMPlatform",
+    "com.apple.driver.AppleARMWatchdogTimer",
+    "com.apple.driver.AppleAudioClockLibs",
+    "com.apple.driver.AppleEffaceableStorage",
+    "com.apple.driver.AppleIISController",
+    "com.apple.driver.AppleM2ScalerCSCDriver",
+    "com.apple.driver.AppleMobileFileIntegrity",
+    "com.apple.driver.ApplePMGR",
+    "com.apple.driver.IODARTFamily",
+    "com.apple.filesystems.apfs",
+    "com.apple.iokit.CoreAnalyticsFamily",
+    "com.apple.iokit.IOAVFamily",
+    "com.apple.iokit.IOAudio2Family",
+    "com.apple.iokit.IOCECFamily",
+    "com.apple.iokit.IOCryptoAcceleratorFamily",
+    "com.apple.iokit.IOGPUFamily",
+    "com.apple.iokit.IOHDCPFamily",
+    "com.apple.iokit.IOMobileGraphicsFamily",
+    "com.apple.iokit.IOReportFamily",
+    "com.apple.iokit.IOSlowAdaptiveClockingFamily",
+    # The UFS block class registers into this family. Removing it to avoid a duplicate-class
+    # report also removed the only place a root device could appear.
+    "com.apple.iokit.IOStorageFamily",
+    "com.apple.iokit.IOSurface",
+    "com.apple.kec.Libm",
+    "com.apple.kec.corecrypto",
+    "com.apple.kext.AppleMatch",
+    "com.apple.kext.CoreTrust",
+    "com.apple.security.AppleImage4",
+    "com.apple.security.sandbox",
+    "com.apple.iokit.IOHIDFamily",
+    "com.apple.iokit.IOHIDEventDriver",
+  ]

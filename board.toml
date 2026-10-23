@@ -130,7 +130,14 @@ roots = [
     # The UFS block class registers into this family. Removing it to avoid a duplicate-class
     # report also removed the only place a root device could appear.
     "com.apple.iokit.IOStorageFamily",
-    "com.apple.iokit.IOSurface",
+    # IOSurface is deliberately absent. Its start() reaches
+    # IOsurfaceRoot::installMemoryRegions(), prints "IOSurface disallowing global lookups", and then
+    # never returns -- presumably because it wants a real GPU behind IOMobileGraphicsFamily. While
+    # it is stuck it holds the IOCatalogue lock, so the main thread's
+    # IOService::waitForService(root-matching) in IOFindBSDRoot never returns either, even with
+    # ROOTDEVICETIMEOUT cut to 5 seconds. Removing it from the prelink is the control experiment
+    # for that hypothesis; restore the line below to put it back.
+    # "com.apple.iokit.IOSurface",
     "com.apple.kec.Libm",
     "com.apple.kec.corecrypto",
     "com.apple.kext.AppleMatch",
