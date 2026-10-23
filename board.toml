@@ -45,7 +45,9 @@ archives = [
     "build-arm-driver.py NativeUfs --unverified",
     # "build-ufs-original-bindings.py",  # only with the real NativeUfs block class
     "build-arm-driver.py NativeRamBlock",
-    "build-mockfs-fixture.py",
+    # Redundant with CONFIG_XNU_SOURCE_MOCKFS=y: the built-in objects and this archive
+    # define the same 23 symbols, and the link reports them as duplicates.
+    # "build-mockfs-fixture.py",
     "build-libpthread-kernel.py",
   ]
 
