@@ -546,3 +546,43 @@ fastboot flash userdata out/nabu/userdata/userdata-root.img
 > 3. **只有上面两条都成立**，才重新考虑真块驱动（`XNU_NABU_UFS_REGISTER_PROBE=0`），
 >    而那条路需要 verified-root bundle，bundle 需要 target image 的 volume policy。
 
+
+> ### 里程碑：根窗口终于发布了（walk 1 → 3）
+>
+> ```
+> keys1
+> walk3        ← instanceMatch 现在遍历 3 个服务：IODTNVRAM 节点 + OS 窗口 + SystemOS 窗口
+> guard2
+> IOFindBSDRoot entered
+> A call wfs
+> ```
+>
+> 之前所有版本都是 `walk1`。`walk3` 说明两个 `NativeUfsBlock` 已经通过 `registerService()` 发布，
+> 也就是 `IOStorageFamily` 有了可枚举的块设备。
+>
+> 三道门依次打开才走到这里，全部记录在案：
+>
+> | 门 | 位置 | 处理 |
+> |---|---|---|
+> | SMMU 写后回读不符 | `SmmuTakeover.h` `configureUfsSmmu()` | bring-up 期间 bypass（写仍然发生，只是不以回读定成败）|
+> | `start()` 的三个前提 | `NativeUfs.cpp` `NativeUfsBlock::start()` | 每道门自报名字（`start:no-bounce` / `no-lock` / `base-false` / `ok`）|
+> | **根窗口发布门禁** | `NativeUfs.cpp` `validate()` 的 `#else` 分支 | **`return false` → 打开。原文注释：Root publication requires owner verification in every build.** |
+>
+> **`validate()` 那道是设计上的硬门禁**：未启用 `NATIVE_VERIFIED_BLOCK` 的构建里它无条件拒绝发布，
+> 这正是 defconfig 注释里那条「冷构建满足不了的门链」。bring-up 期间以未认证窗口发布，读盘尚未可信。
+>
+> ### 现在的状态与下一步
+>
+> 块设备有了，但 `B returned` 仍未出现，`A call wfs` 之后没有下文 —— `waitForService(IOMedia+UUID)`
+> 还没返回。要么是 5 秒超时尚未走到，要么是遍历持有锁。
+>
+> 下一步只需回答一个问题：**发布的这两个 IOMedia 带不带 root volume 的 UUID**。
+>
+> ```
+> 期望：UUID = 04769D26-2CA0-4825-B443-E2E5F88300F2（[payload.adt] root_match_volume_uuid）
+> 实际：窗口只是 UFS 上的字节区间，UUID 要由 IOStorageFamily 从 APFS 容器头里读出来
+> ```
+>
+> 若 UUID 不匹配，就要确认 `userdata-root.img` 的 OS 窗口偏移（`offset=1048576`、
+> `size=6077546496`，见 `userdata-root.json`）与驱动 `configure()` 收到的窗口几何是否一致。
+
