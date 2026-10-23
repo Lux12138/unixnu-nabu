@@ -14,7 +14,12 @@ CONFIG_XNU_SOURCE_CORECRYPTO14=y
 CONFIG_XNU_SOURCE_PTHREAD=y
 CONFIG_XNU_ARM_DT_PLATFORM=y
 CONFIG_XNU_ARMCPU=y
-CONFIG_XNU_NATIVE_UFS=y
+# Parked: NativeUfsBlock derives from IOBlockStorageDevice, which lives in the IOStorageFamily
+# kext. Its symbols must come from the verified-root bundle, and no archive in this tree builds
+# that bundle (it needs the target image's volume policies). Linking the reference object in
+# their place registers a duplicate class and the kernel panics, so the switch stays off until
+# the bundle exists.
+CONFIG_XNU_NATIVE_UFS=n
 CONFIG_XNU_NATIVE_AES=y
 CONFIG_XNU_TRUST_CACHE_RUNTIME=y
 CONFIG_XNU_SOURCE_MOCKFS=y
