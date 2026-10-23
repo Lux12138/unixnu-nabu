@@ -16,6 +16,7 @@ CONFIG_XNU_NATIVE_UFS=y
 # idle, IRQ count, root state, free pages, last interrupt-entry PC and TCR/TTBR/SCTLR.
 # The build refuses it unless the audited UFS/owner-root, virtio and source
 # corecrypto switches are also on.
-CONFIG_XNU_BOOT_PROGRESS=y
+# CONFIG_XNU_BOOT_PROGRESS is not set -- the diagnostic page lives in kits/sheng/
+# BootProgress.c (82 KB plus probes) and has no builder in this tree yet.
 CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
 CONFIG_XNU_OWNER_ROOT_AUDIT=y
