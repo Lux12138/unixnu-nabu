@@ -1,66 +1,96 @@
-# 状态快照（2026-10-23 14:51）
+# 状态快照
 
-## 决定性结论：IOSurface 不是障碍
+## 里程碑：内核走到了 launchd
 
-**证据**：胶片上彩色方块从 16 个变成 20 个，正好对应新增的四个探针。
+**屏幕证据（2026-10-23 晚）**
 
-| 探针 | 位置 | 状态 |
+```
+Process 1 exec of /sbin/launchd failed, errno 2
+/sbin/launchd
+kern_exec.c
+
+FAR=18446744042837921792
+PC=18446744005117767160
+LR=18446744005111703156
+```
+
+**内核完整走完了这条链：**
+
+```
+bsd_autoconf()        ✅
+  kminit()            ✅
+    IOsurfaceRoot::installMemoryRegions()   ✅   ← 之前以为卡在这里，其实没有
+bsd_init 后半段       ✅
+  vfs_mountroot()     ✅
+  load_init_program() ✅   ← 解析出 /sbin/launchd
+    execve("/sbin/launchd")   ❌  errno 2 (ENOENT)
+```
+
+**`errno 2` 是文件不存在 —— 不是内核问题，是根文件系统里没有那个文件。**
+
+### 这推翻了之前三个月的判断
+
+`IOsurfaceRoot::installMemoryRegions()` 那一行**从来不是终点**，它只是最后一条 kprintf。
+它之后紧接的 `dtrace_postinit()`、`inittodr()` 和条件编译的网络初始化都不打日志，所以
+「日志停止」被当成了「内核停止」。
+
+真正一直缺的是**一个真正的根**，不是自研 surface。
+
+## 本地 Linux 构建打通（提速 12 倍）
+
+| 项 | GitHub macOS runner | 本地 WSL Ubuntu |
 |---|---|---|
-| 65 | `bsd_autoconf()` 返回后 | ✅ |
-| 66 | `loopattach()` 之后 | ✅ |
-| 67 | `ether_family_init()` 之后 | ✅ |
-| 68 | `inittodr()` 之前 | ✅ |
-| 69 | `inittodr()` 之后 | ✅ |
+| 单轮构建 | 15–17 分钟 | **72 秒** |
+| 产物 | 49.2 MB | **49 MB** |
+| 可复现 | 只能靠 CI | 本机随时跑 |
 
-**`NABU_MARK(69)` 就在 `vfs_mountroot()` 的正上方。**
+验证：
 
 ```
-bsd_autoconf() ✅ → loopattach ✅ → ether_family_init ✅ → inittodr ✅
-                                                              ↓
-                                                      vfs_mountroot()   ← 现在卡在这
+file            Mach-O 64-bit arm64 executable, flags:<NOUNDEFS|PIE>
+__TEXT vmaddr   0xfffffff007004000      ← 与原版 kernelcache 一致
+symbols         22708
+nabu 探针       nabu_mark / nabu_mark_map / nabu_mark_num / nabu_mark_putc
+UFS 探测        nabu_ufs_register_probe.cpp
+sha256          c756ecdb88a9dd50156dc27d2cdf48a08ddf93fcf204040fa57804f814fc3c15
 ```
 
-### 之前为什么判断错了
+**工具链**：`Allenwdk/xnu-linux-toolchain`（Ubuntu 24.04 / clang 18 / 12 核）
 
-`max_hit` 是**最大** checkpoint，而 ulock 探针（120–123）把它顶到了 123，**把 65–69 全盖住了**。
-屏幕上的 `123` 一直在说「内核走到了 123」，但我们盯着最后一行**文字**看，把
-`IOsurfaceRoot::installMemoryRegions()` 当成了终点。
-
-**它是最后一条 kprintf，不是内核停下的地方。** 它之后紧接的 `dtrace_postinit()`、
-`inittodr()` 和条件编译的网络初始化全都不打日志。
-
-**教训**：数字探针和文字日志必须分开读；`max_hit` 会掩盖低编号的进度。
-
-## 当前真正的卡点
-
-**`vfs_mountroot()`** —— 没有可用的根设备。
-
-预期错误：`cannot mount root, errno = N`（`bsd_init.c` 里 `setconf()` 失败后的路径）。
-
-## 下一步：根文件系统（唯一在走的路）
-
-依据 `/guide/userdata` + `/concepts/userdata`：
+## 一路上解决的 18 个问题
 
 ```
-1. board.toml 的 [ipsw] fetch 加 "OS" 和 "Cryptex1,SystemOS"    ← 已加，未验证
-2. ./unixnu ipsw fetch            # 拉两个组件（几 GB）
-3. ./unixnu build userdata        # SHNGROOT manifest + 两个窗口
-4. [payload.adt] 设 root_match_volume_uuid = <OS 卷 UUID>
-5. fastboot flash userdata out/nabu/userdata/userdata-root.img
-6. 看根卷是否挂上、launchd 是否起来
+ 1  libdispatch 无 Ubuntu 包          → 源码编译 + 手写 .pc
+ 2  toolchain/csh 是符号链接          → cp -L
+ 3  xcrun 硬编码 /usr/bin/xcrun       → 软链
+ 4  sysctl 硬编码 /usr/sbin/sysctl    → Darwin shim 替换
+ 5  /bin/sh 是 dash                   → 指向 bash
+ 6  bison/flex/m4 在 /usr/sbin        → 软链
+ 7  hostcompat.h 不存在               → 自写
+ 8  libc.h 不存在                     → 自写（OSAtomic / 页对齐）
+ 9  copyfile.h / fcopyfile            → 自写
+10  setmode/getmode                   → 自写（who 位移 + mask 修正）
+11  TargetConditionals.h              → 自写，且只放两处
+12  sys/_types/_os_inline.h           → 自写并镜像到 compat 树
+13  mach/mach_init.h                  → 自写
+14  -Wno-* 不认识                     → -Wno-unknown-warning-option
+15  macOS clang 26 诊断名             → CCC_OVERRIDE_OPTIONS 逐条降级
+16  sed -i '' 是 BSD 语法             → 分支处理，且只在 Darwin 跑
+17  awk \( 在 GNU 保留反斜杠          → 做成 patch（zzzz-nabu-awk-parens）
+18  mockfs 双重链接（23 个重复符号）  → 去掉 force_load
 ```
 
-**已知**：`[userdata]` 的 LBA 早实测好
-（`first_lba = 0x288C40` / `last_lba = 0x77BF3FA` / `lba_bytes = 4096`）。
+## 下一步
 
-**不做什么**：不碰 defconfig、不碰 IOSurface、不启用任何「合格基线」开关。
+**唯一缺的是一份真正的根文件系统。**
 
-## 可复现基线
+```
+./unixnu ipsw fetch                          # OS + Cryptex1,SystemOS
+./unixnu build userdata                      # SHNGROOT manifest + 两个窗口
+fastboot flash userdata out/nabu/userdata/userdata-root.img
+```
 
-| 项 | 值 |
-|---|---|
-| 构建 | `39911803391` / success |
-| 内核 | 49.2 MB |
-| 探针 | checkpoint 1–123，其中 65–69 证明已到 `vfs_mountroot()` |
-| defconfig | 9 个开关 |
-| `[kernel] archives` | 8 个 |
+已知：`[userdata]` 的 LBA 早实测好（`first_lba = 0x288C40` / `last_lba = 0x77BF3FA` /
+`lba_bytes = 4096`）。
+
+**不再是编译问题，不再是驱动问题 —— 是数据问题。**
