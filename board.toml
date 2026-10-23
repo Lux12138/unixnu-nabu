@@ -37,9 +37,15 @@ archives = [
     "build-arm-driver.py ArmCpu",
     "build-arm-driver.py NativeAES",
     "build-native-aes-bindings.py",
-    # Public IOStorageFamily headers for the built-in block drivers. audit-storage-interface.py
-    # does this too but additionally wants a live guest snapshot we cannot produce.
-    "prepare-storage-headers.py",
+    # Compiles the real IOBlockStorageDevice.cpp into
+    # build/storage-abi/IOBlockStorageDevice-reference.o, which build-xnu-4k-baseline.sh links to
+    # supply the base class, its vtable and gMetaClass: NativeUfsBlock derives from
+    # IOBlockStorageDevice, which lives in the IOStorageFamily kext rather than the kernel.
+    # It also produces the public header tree. Its later ABI qualification wants a live guest
+    # snapshot, but that stage is skipped when the prelinked kernel is absent, so the reference
+    # object is still emitted. prepare-storage-headers.py only writes headers and left NativeUfs
+    # unlinkable with undefined __ZN20IOBlockStorageDevice... symbols.
+    "audit-storage-interface.py",
     # --unverified is the bring-up mode: adopt the running controller without the verified-root
     # policy bundle.
     "build-arm-driver.py NativeUfs --unverified",
