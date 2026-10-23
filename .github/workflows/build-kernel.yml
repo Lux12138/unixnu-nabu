@@ -43,7 +43,12 @@ jobs:
 
       - name: Clone UniXNU
         run: |
-          git clone --recurse-submodules --depth 1 --shallow-submodules https://github.com/Lux12138/UniXNU.git UniXNU
+          # The previous source, Lux12138/UniXNU, was a snapshot that had fallen 163 commits behind
+# the upstream project. None of this port's work lives in that tree -- every nabu change is
+# in this device repository (board.toml, configs/, patches/xnu, scripts/) -- so tracking
+# upstream directly is safe and brings the newer build payload / bootimg commands, the
+# boot progress implementation and the current drivers.
+          git clone --recurse-submodules --depth 1 --shallow-submodules https://github.com/UniXNU/UniXNU.git UniXNU
 
       - name: Select defconfig
         run: |
