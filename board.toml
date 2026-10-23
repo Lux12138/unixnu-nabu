@@ -43,7 +43,7 @@ archives = [
     # --unverified is the bring-up mode: adopt the running controller without the verified-root
     # policy bundle.
     "build-arm-driver.py NativeUfs --unverified",
-    "build-ufs-original-bindings.py",
+    # "build-ufs-original-bindings.py",  # only with the real NativeUfs block class
     "build-arm-driver.py NativeRamBlock",
     "build-mockfs-fixture.py",
     "build-libpthread-kernel.py",
