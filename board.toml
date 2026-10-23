@@ -112,19 +112,33 @@ roots = [
     "com.apple.driver.AppleAudioClockLibs",
     "com.apple.driver.AppleEffaceableStorage",
     "com.apple.driver.AppleIISController",
-    "com.apple.driver.AppleM2ScalerCSCDriver",
+    # --- GPU / media stack, all removed together for the IOSurface experiment ---
+    # Taking only com.apple.iokit.IOSurface out of this list does nothing: --root means "start here
+    # and pull in whatever this kext depends on", so IOAVFamily, IOGPUFamily,
+    # IOMobileGraphicsFamily and AppleM2ScalerCSCDriver pull IOSurface straight back in (37
+    # IOSurfaceRoot strings survive in the linked kernel, and the boot still prints
+    # IOsurfaceRoot::installMemoryRegions()).
+    #
+    # IOSurfaceRoot::start() never returns there -- presumably it wants a real GPU behind
+    # IOMobileGraphicsFamily -- and while it is stuck it holds the IOCatalogue lock, so the main
+    # thread's IOService::waitForService(root-matching) in IOFindBSDRoot never returns either, even
+    # with ROOTDEVICETIMEOUT cut to 5 seconds.
+    #
+    # None of this stack is needed to mount the root volume or start launchd, so it all goes out
+    # for the control experiment. Restore these lines to put it back.
+    # "com.apple.driver.AppleM2ScalerCSCDriver",
     "com.apple.driver.AppleMobileFileIntegrity",
     "com.apple.driver.ApplePMGR",
     "com.apple.driver.IODARTFamily",
     "com.apple.filesystems.apfs",
     "com.apple.iokit.CoreAnalyticsFamily",
-    "com.apple.iokit.IOAVFamily",
+    # "com.apple.iokit.IOAVFamily",
     "com.apple.iokit.IOAudio2Family",
     "com.apple.iokit.IOCECFamily",
     "com.apple.iokit.IOCryptoAcceleratorFamily",
-    "com.apple.iokit.IOGPUFamily",
-    "com.apple.iokit.IOHDCPFamily",
-    "com.apple.iokit.IOMobileGraphicsFamily",
+    # "com.apple.iokit.IOGPUFamily",
+    # "com.apple.iokit.IOHDCPFamily",
+    # "com.apple.iokit.IOMobileGraphicsFamily",
     "com.apple.iokit.IOReportFamily",
     "com.apple.iokit.IOSlowAdaptiveClockingFamily",
     # The UFS block class registers into this family. Removing it to avoid a duplicate-class
