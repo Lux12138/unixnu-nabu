@@ -330,7 +330,132 @@ IOMedia 发布之后才会出现在属性里。
 | `darwinboot-memory-size` 太小 | 4.75 GiB 足够把 4 MiB RAMDisk 映射出来（`mdevadd base=c40d5000`）。512 MiB 那次的回退是它导致的，已恢复 |
 | apfs 没在 roots 里 | `IOBSD matched` 证明 apfs 和 IOStorageFamily 都注册了 |
 
-### 下一步要看的两件事
+#
+## 屏幕输出：已经修好了
+
+### 两个根因（都在画字代码里，不在行号）
+
+| 问题 | 代码 | 后果 |
+|---|---|---|
+| 每画一行清掉 **450px** | `nabu_mark_text`: `fill(0, y-12, g_w, 10*lh, BLACK)`，`lh = 45` | 行距小于 450px 的行互相擦除，怎么排位都没用 |
+| console 滚到**屏幕最底** | `nabu_mark_putc`: `g_ty > g_h - 40` 才回卷 | console 会盖掉任何位置的状态行 |
+
+### 修法
+
+```c
+/* nabu_early_mark.c —— 每行只清自己 */
+fill(0, y > 20 ? y - 12 : 0, g_w, lh + 16, 0xFF000000);
+
+/* nabu_early_mark.c —— console 停在状态区之上 */
+if (g_ty > (g_h > 200 ? g_h - 780 : 600)) { g_ty = 16; }
+```
+
+### 最终布局（panel 1600x2560）
+
+```
+ 16 ────────────────┐
+      console        │  滚到 1780 为止
+1780 ────────────────┘
+                    ← 780px 保留区
+1850  guard 0/1/2
+1920  walk N
+1990  <类名>
+2060  <实例名>
+2130  IOFindBSDRoot entered
+2200  A call wfs  →  B returned 0/1
+```
+
+**六行等距 70px、互不干扰、console 进不来。** 这一块已经稳定，实机验证通过。
+
+### 还剩下的屏幕问题
+
+console 日志仍然显示。原因查清了：`PE_kputc` 有**三处**赋值，前两处我已经关掉：
+
+1. `osfmk/arm/nabu_early_mark.c` —— `if (0)` 包住，已失效
+2. `pexpert/arm/pe_kprintf.c` 的 regex patch —— 因为 `PE_kputc` 是函数指针而非函数定义，regex 匹配不到，走了 WARN 分支
+3. **`patches/xnu/zzzz-nabu-kprintf-default-on.patch:29`** —— 无条件执行，**这才是日志还在的真正来源**，下一轮处理它
+
+另外 `IOsurfaceRoot` 和蓝底 `UnI XNU` 横幅已经通过「映射后整屏填黑」清掉了。
+
+
+## 根因找到了：ADT 缺一个 `interrupt-controller` 属性
+
+**这是整条链的真正源头，比之前追的 IODTNVRAM 过滤要根本得多。**
+
+屏幕上有这么一行白字：
+
+```
+pe_arm_map_interrupt_controller: failed to find the interrupt-controller.
+```
+
+`pexpert/arm/pe_identify_machine.c:206` 是这样找中断控制器的：
+
+```c
+if (SecureDTFindEntry("interrupt-controller", "master", &entryP) == kSuccess) {
+    SecureDTGetProperty(entryP, "reg", (void const **)&reg_prop, &prop_size);
+    gPicBase = ml_io_map(soc_phys + *reg_prop, *(reg_prop + 1));
+}
+if (gPicBase == 0) {
+    kprintf("...failed to find the interrupt-controller.\n");
+}
+```
+
+`SecureDTFindEntry` 的签名是 **(propName, propValue, entryP)**，同文件里其它调用可以印证：
+
+```c
+SecureDTFindEntry("name", "arm-io", ...)          // 找 name = "arm-io"
+SecureDTFindEntry("device_type", "timer", ...)    // 找 device_type = "timer"
+SecureDTFindEntry("name", "uart0", ...)           // 找 name = "uart0"
+```
+
+所以它找的是：**带 `interrupt-controller` 属性、且该属性值为 `master` 的节点**。
+
+而 `make-nabu-adt.py` 生成的 `intc` 节点只有三个属性：
+
+```python
+node('intc', [('compatible', b'arm,gic-v3\0'),
+              ('reg', ...),
+              ('redistributor-stride', ...)])
+```
+
+**没有 `interrupt-controller` 标记，所以永远找不到。**
+
+### 为什么这一个属性就能卡死整个 boot
+
+```
+ADT 缺 interrupt-controller
+  → gPicBase = 0，中断子系统完全不可用
+    → IODTNVRAM 读属性要走 SPI/I2C，等不到中断，无限阻塞
+      → instanceMatch 卡在 matchInternal 里
+        → waitForService(IOMedia+UUID) 的 5 秒超时也轮不到（它持着 IOCatalogue 锁）
+          → boot 停住
+```
+
+**UFS 读盘要走中断，也是同一个病根。** 之前把卡点归到 IODTNVRAM、UFS、apfs、GPU 都不对，
+它们都只是「等中断」的不同受害者。
+
+### 修复
+
+```python
+node('intc', [('compatible', b'arm,gic-v3\0'),
+              ('interrupt-controller', b'master\0'),    # ← 新增，SafeDTFindEntry 找的就是它
+              ('name', b'interrupt-controller\0'),
+              ('reg', struct.pack('<4Q',
+                                  GIC_DIST - ARMIO_BASE, GIC_DIST_SIZE,
+                                  GIC_REDIST - ARMIO_BASE, GIC_REDIST_SIZE)),
+              ('redistributor-stride', struct.pack('<Q', 0x40000))])
+```
+
+基址本来就对得上：
+
+```
+ARMIO_BASE = 0x17000000        (arm-io 的 ranges，即 gSocPhys)
+GIC_DIST   = 0x17a00000        (SM8150 sm8150.dtsi intc@17a00000)
+reg 偏移   = GIC_DIST - ARMIO_BASE = 0xA00000
+gPicBase   = soc_phys + 偏移 = 0x17a00000   ✓
+```
+
+## 下一步要看的两件事
 
 1. **`waitForService` 是超时返回 NULL，还是根本卡死？** 5 秒超时后如果反复打印
    `waitForService=(nil)` + `still waiting for root device`，就是「UFS 没发布带该 UUID
