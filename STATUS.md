@@ -552,6 +552,42 @@ fastboot flash userdata out/nabu/userdata/userdata-root.img
 
 
 
+
+> ### 🎯 决定性数据：ADT 内存参数是对的，异常在 `vm_page_free_count`
+>
+> ```
+> maxmem4864        = 4864 MiB = 4.75 GiB   ← 等于 owned_memory_size = 0x130000000 ✓
+> pages1207620      = 1,207,620 页
+> freepg91199444    = 91,199,444 页        ← 应约为 1,207,620，虚高 76 倍
+> ```
+>
+> 验算页大小：
+>
+> ```
+> 1,207,620 × 4096  = 4.95 GB ≈ 4.6 GiB   ✓ 与 4.75 GiB 吻合 → 页大小 4 KB
+> 1,207,620 × 16384 = 19.8 GB             ✗ 不符
+> ```
+>
+> **`max_mem` 与 `vm_page_pages` 都正确，`dram_size` / `owned_memory_size` 不需要改。**
+> 任何「把 dram_size 改成 6/8 GB」的建议都建立在这个值得重新确认之前 —— 而本机是 12 GiB 扩容版，
+> `owned_memory_size` 4.75 GiB 是实测走通到 launchd 的值。
+>
+> **唯一异常：`vm_page_free_count` 虚高 76 倍。** 这正是缺页失败的根因：分配器以为有 9100 万空闲页，
+> 从 free list 取页时拿到越界条目，`pmap_enter` 失败，缺页于是变成 kernel data abort。
+>
+> 也解释了本轮的两个观测差异：`cpo0` / `cp20` 落在已建好映射的页上，无需分配，所以成功；而在 `ap`
+> 上写一字节需要新页，走了错误的 free list，直接 panic。
+>
+> ### 下一轮的目标收敛为一个
+>
+> **`vm_page_free_count` 为什么是 91,199,441。**
+>
+> 已知它不等于 `vm_page_pages`（1,207,620），也不是任何合理的物理量。要查：
+>
+> 1. `vm_page_bootstrap` 里对 `vm_page_free_count` 的赋值路径；
+> 2. 是否有别处在启动早期累加了这个计数器（`vm_page_grab`/`vm_page_insert` 的初值）；
+> 3. `MACHINE_CONFIGS=BCM2837` 是否让页池初始化走了树莓派的分支。
+
 > ### 本轮的终点：用户空间缺页无法修复（VM/PMAP 层）
 >
 > 从 `B returned1` 之后，内核进到 `launchd` 的 `execve`，然后在这条路径上 panic：
