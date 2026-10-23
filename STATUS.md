@@ -135,6 +135,47 @@ grep -n 'NABU:' bsd/kern/bsd_init.c
 
 **注意不要先 `git checkout --` 那个文件** —— 那会把它还原成 pristine，行号又变回另一套。
 
+
+## `bsd_autoconf` 之后为什么一片静默
+
+内核在 `bsd_autoconf()` 返回后看起来「停住」，但这中间每一站都用 `bsd_init_kprintf` 打印，
+而它在当前配置下是 **no-op**。所以卡在 `dtrace_postinit`、`loopattach`、`ether_family_init`、
+`net_init_run`、`inittodr`、`vfs_mountroot` 中的任何一处，屏幕上看到的都和卡在上一行一模一样。
+
+现在每一站都用真 `kprintf` + `NABU_MARK` 括起来了：
+
+```
+NABU: before kminit          61
+NABU: after kminit           62
+NABU: bsd_autoconf returned  65
+NABU: dtrace_postinit
+NABU: dtrace done            66
+NABU: loopattach             67
+NABU: loopattach done
+NABU: ether_family_init      68
+NABU: ether done
+NABU: net_init_run           69
+NABU: net done
+NABU: inittodr               70
+NABU: inittodr done
+```
+
+**最后一条出现在屏幕上，就是真正的卡点。** 编出来的 `kernel.macho` 里 13 条字符串全部可查：
+
+```bash
+strings out/nabu/kernel/kernel.macho | grep '^NABU: ' | sort -u
+```
+
+### 两个曾经误导判断的假线索
+
+**`IOsurfaceRoot::installMemoryRegions()` 不是卡点。** 它来自预链接进
+`kernelcache.decompressed` 的 Apple kext（`IOSurfaceRoot.cpp`），源码不在这棵树上。
+`nm kernel.macho | grep -i iosurfaceroot` 是空的 —— 那行日志只是 kext 的 `start()` 顺带打印。
+
+**`native_offline_gpu_publish()` 也没有被调用。** `XNU_NATIVE_OFFLINE_GPU` 默认 0，
+`#if` 整体为假，`nm kernel.macho | grep native_offline_gpu` 是 0 次。它的源码在
+`drivers/NativeMetal/NativeOfflineGPU.cpp`，但这份内核里没有它。
+
 ## 下一步
 
 **唯一缺的是一份真正的根文件系统。**
