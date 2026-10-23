@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-26
     timeout-minutes: 350
     env:
       GITHUB_TOKEN: ${{ secrets.GH_PAT }}
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode 16
+      - name: Select Xcode
         run: |
           echo "=== available Xcode ==="
           ls -d /Applications/Xcode*.app 2>/dev/null || echo none
@@ -23,7 +23,11 @@ jobs:
           # newer iig emits IORPC.kernelContent / different reply-size metadata, and
           # mig_init() then trips "kroutine must have precise size" or overflows the
           # dispatch table. That is exactly where the boot was dying.
-          XC=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | head -1)
+          # Upstream pins Xcode 26.6 on macos-26. Taking the oldest image instead gave the MIG
+          # step an Xcode whose clang rejects -mach_msg2.
+          XC=/Applications/Xcode_26.6.app
+          [ -d "$XC" ] || XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          [ -d "$XC" ] || XC=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
           echo "picked: $XC"
           if [ -n "$XC" ]; then
             sudo xcode-select -s "$XC/Contents/Developer"
