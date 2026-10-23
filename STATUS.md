@@ -269,6 +269,77 @@ bash scripts/nabu-bsd-init-probes.py .cache/xnu-work/bsd/kern/bsd_init.c
 按锚点插入，输出每一处 `insert` / `skip`，重复运行安全。
 `build-xnu-4k-baseline.sh` 在 patch 循环之后调用它。
 
+
+## 根卷挂载路径：卡点已经收敛到一行调用
+
+三天前只能看到「屏幕停住」。现在 `bsd_init.c` 和 `IOKitBSDInit.cpp` 里一共 39 个探针，
+把 `inittodr` 之后的每一站都照亮了。实际走到的路径是：
+
+```
+inittodr done
+mount loop iteration
+setconf enter
+setconf calling IOFindBSDRoot
+IOFindBSDRoot enter
+IOBSD wait start
+IOBSD waitForMatchingService
+  IOsurfaceRoot::installMemoryRegions()        <- 等待期间枚举服务，不是卡点
+  IOSurface disallowing global lookups
+IOBSD matched                                   <- apfs + IOStorageFamily 都注册成功了
+IOBSD read /chosen
+root-matching Present                           <- 我加的 UUID 读到了
+didRam=0
+mdevadd ramdisk base=c40d5000 size=400000       <- 4 MiB RAMDisk，就是 ramdisk.img
+past ramdisk, matching=set rd=none              <- matching 有值，rd 已清空
+waitForService enter                            <- ★ 卡在这里
+```
+
+### 结论
+
+`IOFindBSDRoot` 拿着 `root-matching` 的匹配条件去等一个 IOMedia：
+
+```xml
+<dict>
+  <key>IOProviderClass</key><string>IOMedia</string>
+  <key>IOPropertyMatch</key>
+  <dict><key>UUID</key><string>04769D26-2CA0-4825-B443-E2E5F88300F2</string></dict>
+</dict>
+```
+
+**这个 UUID 是 APFS 卷的 UUID，不是 GPT 分区 UUID。** 它只有在 apfs 解析完容器、把卷作为
+IOMedia 发布之后才会出现在属性里。
+
+`IOKitBSDInit.cpp` 的等待是：
+
+```c
+968  do {
+969      t.tv_sec = ROOTDEVICETIMEOUT;      // 120 或 60 秒
+973      service = IOService::waitForService( matching, &t );
+974      if ((!service) || (mountAttempts == 10)) { ... }
+```
+
+**超时不是致命的** —— 返回 NULL 后打印 `still waiting for root device`、睡 5 秒再重试。
+所以把 `ROOTDEVICETIMEOUT` 临时改成 5 秒，每次刷机 30 秒就能拿到答案。
+
+### 排除掉的三条死路
+
+| 曾经怀疑 | 实际 |
+|---|---|
+| `IOsurfaceRoot::installMemoryRegions()` 卡死 | 它来自预链接的 Apple kext（`IOSurfaceRoot.cpp`），只是 `IOBSD wait` 期间枚举服务的副产品 |
+| `native_offline_gpu_publish()` 卡死 | `XNU_NATIVE_OFFLINE_GPU` 默认 0，`strings` 里那条调用根本不存在 |
+| `darwinboot-memory-size` 太小 | 4.75 GiB 足够把 4 MiB RAMDisk 映射出来（`mdevadd base=c40d5000`）。512 MiB 那次的回退是它导致的，已恢复 |
+| apfs 没在 roots 里 | `IOBSD matched` 证明 apfs 和 IOStorageFamily 都注册了 |
+
+### 下一步要看的两件事
+
+1. **`waitForService` 是超时返回 NULL，还是根本卡死？** 5 秒超时后如果反复打印
+   `waitForService=(nil)` + `still waiting for root device`，就是「UFS 没发布带该 UUID
+   的 IOMedia」；如果 `=%p` 一直不打印，才是 IOCatalogue 的锁问题。
+2. **UFS 驱动发布 IOMedia 时带不带 UUID。** `NativeUfs.cpp:1532` 和
+   `NativeRamBlock.cpp:293` 里的 `selectVolumeSeed()` 都是**查询**方（`getMatchingServices`），
+   不是发布方。真正设 `UUID` 属性的是 `IOStorageFamily` 从介质里读出来的，
+   所以 UFS 一侧必须让 apfs 能认出容器头。
+
 ## 下一步
 
 **唯一缺的是一份真正的根文件系统。**
