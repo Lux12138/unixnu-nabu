@@ -479,3 +479,30 @@ fastboot flash userdata out/nabu/userdata/userdata-root.img
 `lba_bytes = 4096`）。
 
 **不再是编译问题，不再是驱动问题 —— 是数据问题。**
+
+> ### 一个会静默毁掉所有构建的坑（已修）
+>
+> WSL 的全局 gitconfig 里曾经有：
+>
+> ```
+> url.https://gh.llkk.cc/https://github.com/.insteadof  https://github.com/
+> ```
+>
+> 那个加速镜像已经挂了，于是**每次 `git fetch` 都静默失败**（`gnutls_handshake() failed`），
+> 而构建脚本照旧用「已经检出的旧代码」继续跑。表现是：明明改了仓库，构建结果却永远不变。
+> 已删除该规则，`github.com` 直连正常。
+>
+> **凡是「改了没反应」，第一步先查 `git log -1` 和 `git fetch` 是否真的成功。**
+
+> ### 下一阶段目标（当前）
+>
+> 构建是绿的，块驱动按设计是只读探针，都不是问题。目标收敛成三条：
+>
+> 1. **用仓库里这一版内核启动，确认它健康地越过 `vfs_mountroot`** —— 判据是屏幕上不再出现
+>    `Metaclass ... duplicate class`、`gPICBase` 是有效地址、六行状态行干净。
+> 2. **查清已经刷入的 userdata 为什么没被采用为根** —— 对照 `userdata-root.json` 里
+>    `manifest_sha256 = 6684c652…` 与 OS 窗口 `offset=1048576 / size=6077546496`，
+>    确认 `[payload.adt]` 的 `root_match_volume_uuid` 与 manifest 里的卷身份一致。
+> 3. **只有上面两条都成立**，才重新考虑真块驱动（`XNU_NABU_UFS_REGISTER_PROBE=0`），
+>    而那条路需要 verified-root bundle，bundle 需要 target image 的 volume policy。
+

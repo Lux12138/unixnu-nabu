@@ -49,6 +49,10 @@ archives = [
     # --unverified is the bring-up mode: adopt the running controller without the verified-root
     # policy bundle.
     "build-arm-driver.py NativeUfs --unverified",
+    # Bind NativeUfsBlock's IOBlockStorageDevice imports to the prelinked kext's real runtime
+    # addresses (`.globl` + `.set symbol, addr`), so the block driver links without either undefined
+    # symbols or a duplicate metaclass. Reads build/native-prelink/*-candidate.macho + .json.
+    "build-ufs-original-bindings.py --component NativeUfs",
     # "build-ufs-original-bindings.py",  # only with the real NativeUfs block class
     "build-arm-driver.py NativeRamBlock",
     # Redundant with CONFIG_XNU_SOURCE_MOCKFS=y: the built-in objects and this archive
