@@ -45,7 +45,11 @@ archives = [
     # snapshot, but that stage is skipped when the prelinked kernel is absent, so the reference
     # object is still emitted. prepare-storage-headers.py only writes headers and left NativeUfs
     # unlinkable with undefined __ZN20IOBlockStorageDevice... symbols.
-    "audit-storage-interface.py",
+    # Not needed: it only produces build/storage-abi/IOBlockStorageDevice-reference.o, which nothing
+    # links on this path, and that leftover object is what previously registered a second
+    # IOBlockStorageDevice metaclass and panicked the kernel. The public headers it also writes
+    # are produced by prepare-storage-headers.py.
+    # "audit-storage-interface.py",
     # --unverified is the bring-up mode: adopt the running controller without the verified-root
     # policy bundle.
     "build-arm-driver.py NativeUfs --unverified",

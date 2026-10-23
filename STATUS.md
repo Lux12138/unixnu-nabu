@@ -494,6 +494,46 @@ fastboot flash userdata out/nabu/userdata/userdata-root.img
 >
 > **凡是「改了没反应」，第一步先查 `git log -1` 和 `git fetch` 是否真的成功。**
 
+
+> ### 里程碑：块驱动第一次真正注册（walk 从 1 变成 2）
+>
+> 之前所有版本的屏幕都是 `walk 1` —— 遍历只碰到那个 IODTNVRAM 节点，因为 UFS 是只读探针，
+> 从不发布块设备。恢复「真块驱动 + `build-ufs-original-bindings.py`」之后：
+>
+> ```
+> keys1
+> walk2      ← ★ instanceMatch 走了 2 个服务，块设备自己注册进来了
+> guard2
+> IOFindBSDRoot entered
+> ```
+>
+> **这同时证明绝对地址绑定（`.globl` + `.set symbol, <addr>`）在真机上成立** —— 若地址不对，
+> 内核会在更早阶段崩掉，不会走到 `IOFindBSDRoot`。
+>
+> ### 为什么解决了「undefined 与 duplicate」的两难
+>
+> `IOBlockStorageDevice` 属于 IOStorageFamily kext，不在内核里：
+>
+> | 做法 | 结果 |
+> |---|---|
+> | 不链接 | 几百个 `__ZN20IOBlockStorageDevice...` undefined |
+> | 链接 `IOBlockStorageDevice-reference.o` | 注册第二个 metaclass → `postModLoad` panic |
+> | `-Wl,-undefined,dynamic_lookup` | Linux 的 ld64 断言崩溃（macOS 才可用） |
+> | **`build-ufs-original-bindings.py`** | **符号 `.set` 到 prelinked kext 的真实地址** |
+>
+> binder 读的是 `build/native-prelink/*-candidate.macho` + `.json`。那个 candidate 从不生成，
+> 但 `out/nabu/kernel/kernel.macho` + `kernel.json` 满足它的全部校验
+> （`candidate_sha256` 相符、`original_sha256` 等于锁定的 kernelcache、plan 里含 IOStorageFamily），
+> 所以构建前把这两个文件暂存成 candidate 即可。产出 11 个符号，全部标记 `A`（absolute）。
+>
+> **时间线（从仓库历史恢复）**：20:40 内核到 launchd 时，块驱动与 bindings 都在位；21:37 改用
+> 寄存器探针，21:41 顺手去掉 bindings，此后 `IOMedia` 恒为 0，文档却记成「不是驱动问题」。
+>
+> ### 待修：`IOMedia` 计数行会被 console 覆盖
+>
+> `nabu_mark_num("IOMedia", nmedia, 1850)` 在探针里仍在执行、内核里也有该字符串，但屏幕上不显示：
+> 该行位于 console 残留白字的覆盖范围内。下一轮把它挪到 1900 以下或改为与 `keys` 同排显示。
+
 > ### 下一阶段目标（当前）
 >
 > 构建是绿的，块驱动按设计是只读探针，都不是问题。目标收敛成三条：
