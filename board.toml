@@ -56,7 +56,10 @@ tool = "scripts/make-nabu-adt.py"
 chip_id = "207"
 # Measured 2026-10-20 via TWRP: /proc/meminfo MemTotal = 11766512 kB
 # (12 GiB = 12582912 kB minus ~816 MB reserved for modem/hyp/rmtfs) => physical 12 GiB.
-owned_memory_size = "0x130000000"
+# darwinboot-memory-size: the contiguous window DarwinBoot asks the firmware for.
+# 512 MiB is the value 1PJL's working nabu payload uses, and a smaller window is easier to
+# allocate contiguously in EfiConventionalMemory than 4.75 GiB was.
+owned_memory_size = "0x20000000"
 dram_size = "0x300000000"
 cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"
 packed_data_ramdisk = true
