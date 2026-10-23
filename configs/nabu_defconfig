@@ -1,4 +1,4 @@
-# nabu_defconfig
+﻿# nabu_defconfig
 # Mirrors UniXNU-uke's uke-full_defconfig -- the configuration that mounts a root volume and
 # starts launchd on SM7675. Every switch below is reproducible from the pinned sources alone.
 #
@@ -19,7 +19,7 @@ CONFIG_XNU_ARMCPU=y
 # that bundle (it needs the target image's volume policies). Linking the reference object in
 # their place registers a duplicate class and the kernel panics, so the switch stays off until
 # the bundle exists.
-CONFIG_XNU_NATIVE_UFS=n
+CONFIG_XNU_NATIVE_UFS=y
 CONFIG_XNU_NATIVE_AES=y
 CONFIG_XNU_TRUST_CACHE_RUNTIME=y
 CONFIG_XNU_SOURCE_MOCKFS=y
