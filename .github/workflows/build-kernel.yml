@@ -12,6 +12,10 @@ jobs:
       UNIXNU_DEBUG_LDFILELIST: "1"
       XNU_MAKE_V: "1"
       GH_TOKEN: ${{ secrets.GH_PAT }}
+      # NativeUfs.cpp does not compile in this tree (three errors the archive log truncates away).
+      # Build the read-only register probe in its place so the kernel links and reports what the
+      # GCC and UFSHCI windows actually read.
+      XNU_NABU_UFS_REGISTER_PROBE: "1"
     steps:
       - uses: actions/checkout@v4
 
