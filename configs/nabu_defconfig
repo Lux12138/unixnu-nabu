@@ -1,33 +1,36 @@
 # nabu_defconfig
-# build-arm-driver.py 闂備浇顕у锕傦綖婢舵劖鍋ら柡鍥╁剱閸ゆ洟鏌熼幑鎰【闁?UniXNU-sheng 缂傚倸鍊搁崐椋庣矆娓氣偓钘濋弶鍫氭櫅閸ㄦ繃銇勯弽顐⑩偓娑㈠炊椤掆偓閽冪喖鏌曟径娑㈡婵炲懏鐗犻弻锝堢疀閺囩偘鍝楀┑鈽嗗亜鐎氼噣骞忕€ｎ喗鍤戞い鎺戝€婚敍?ArmDTPlatform/ArmCpu
+# Mirrors UniXNU-uke's uke-full_defconfig -- the configuration that mounts a root volume and
+# starts launchd on SM7675. Every switch below is reproducible from the pinned sources alone.
+#
+# The hardware-qualification gates are deliberately absent, for the reasons uke records and this
+# port rediscovered the hard way: VIRTIO_BLOCK / RAM_BLOCK need a live guest snapshot
+# (gdb-stop.json) of the original IOBlockStorageDevice metadata; VERIFIED_ROOT_PROBE /
+# OWNER_ROOT_AUDIT / OWNER_ROOT_TRUST need a signed policy bundle built from the real OS/SystemOS
+# DMGs; BOOT_PROGRESS refuses to build without all of those. Enabling them mid-bring-up produces a
+# chain of gates that a cold build cannot satisfy.
 
+CONFIG_XNU_BUILD_ARCHIVES=y
+CONFIG_XNU_SOURCE_CORECRYPTO14=y
+CONFIG_XNU_SOURCE_PTHREAD=y
 CONFIG_XNU_ARM_DT_PLATFORM=y
 CONFIG_XNU_ARMCPU=y
+CONFIG_XNU_NATIVE_UFS=y
+CONFIG_XNU_NATIVE_AES=y
+CONFIG_XNU_TRUST_CACHE_RUNTIME=y
+CONFIG_XNU_SOURCE_MOCKFS=y
+CONFIG_XNU_NATIVE_CS_HASH_CACHE=y
+CONFIG_XNU_DT_PANIC_REGION=y
 CONFIG_XNU_NATIVE_ARCH_TIMER=y
 CONFIG_XNU_NATIVE_PAN=y
-CONFIG_XNU_DT_PANIC_REGION=y
-CONFIG_XNU_SOURCE_CORECRYPTO14=y
-CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
 CONFIG_XNU_OWNER_DATA_VOLUME_UUID="BEC2158A-350E-4F2E-B87E-A0E69FB0BDEA"
 
-# The documented diagnostic page: boot-progress=1 freezes a 48x120 text overlay
-# after 30 s without progress, boot-progress=2 runs it continuously. Reports time,
-# idle, IRQ count, root state, free pages, last interrupt-entry PC and TCR/TTBR/SCTLR.
-# The build refuses it unless the audited UFS/owner-root, virtio and source
-# corecrypto switches are also on.
-# CONFIG_XNU_BOOT_PROGRESS is not set -- the diagnostic page lives in kits/sheng/
-# BootProgress.c (82 KB plus probes) and has no builder in this tree yet.
+# sheng / uke specific, not carried over:
+#   CONFIG_XNU_SHENG_PMGR                needs the target board's PMGR values
+#   CONFIG_XNU_ZONE_PGZ_ALIGNMENT_PROBE  a probe for a symptom nabu has not shown
+#   CONFIG_XNU_NATIVE_LEGACY_DISPLAY     needs display configuration this port has not done
+#   CONFIG_XNU_NATIVE_ADRENO             the driver knows Adreno 740; nabu is 640
 
-# NativeVirtioBlock refuses to build without the qualified NativeAES baseline.
-
-# --- storage and integrity baseline (mirrors sheng_defconfig) -------------------
-# The kernel scripts gate several options on these being present together; NativeAES in
-# particular refuses to build without the qualified original AES/crypto prelink closure.
-
-# mockfs supplied from source rather than only as an archive target.
-
-# Verified-root probe and the owner-root trust/mount chain.
-
-# Archive paths the baseline expects. {tree} expands to the build tree.
-
-# nabu is not armvirt and has no mobile display provider yet.
+CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
+CONFIG_XNU_EXTRA_LD_ARCHIVES=""
+CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
+CONFIG_XNU_ARMVIRT_PLATFORM=n

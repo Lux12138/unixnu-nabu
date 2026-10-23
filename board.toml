@@ -31,19 +31,23 @@ defconfig = "nabu_defconfig"
 # build-arm-driver.py is absent from the main branch, and libpthread needs link.filelist
 # which a bootstrap pass never reaches, so only corecrypto is built here.
 archives = [
-  "build-corecrypto-14.py",
-  "build-corecrypto-14.py --namespace",
-  "build-arm-driver.py ArmDTPlatform",
-  "build-arm-driver.py ArmCpu",
-  "build-arm-driver.py NativeAES",
-    # Produces build/storage-abi/include, which build-arm-driver.py adds to the
-    # include path for NativeUfs / NativeVirtioBlock / NativeRamBlock.
-    "audit-storage-interface.py",
-  "build-arm-driver.py NativeUfs",
-  # mockfs needs its fixture object; without it the file system code is present but the
-  # mount path has no fixture to build against.
-  "build-mockfs-fixture.py",
-]
+    "build-corecrypto-14.py",
+    "build-corecrypto-14.py --namespace",
+    "build-arm-driver.py ArmDTPlatform",
+    "build-arm-driver.py ArmCpu",
+    "build-arm-driver.py NativeAES",
+    "build-native-aes-bindings.py",
+    # Public IOStorageFamily headers for the built-in block drivers. audit-storage-interface.py
+    # does this too but additionally wants a live guest snapshot we cannot produce.
+    "prepare-storage-headers.py",
+    # --unverified is the bring-up mode: adopt the running controller without the verified-root
+    # policy bundle.
+    "build-arm-driver.py NativeUfs --unverified",
+    "build-ufs-original-bindings.py",
+    "build-arm-driver.py NativeRamBlock",
+    "build-mockfs-fixture.py",
+    "build-libpthread-kernel.py",
+  ]
 
 [payload.adt]
 tool = "scripts/make-nabu-adt.py"
@@ -79,43 +83,37 @@ kernelcache_sha256 = "f18b4df865405f2a287b84977d7aca745e056d656d9fc9df1662970ce2
 slide = "-0x1000000"
 early_security_init = "com.apple.driver.AppleMobileFileIntegrity=0xfffffff005ab4ae0"
 roots = [
-  "com.apple.AppleFSCompression.AppleFSCompressionTypeZlib",
-  "com.apple.driver.AppleARMPlatform",
-  "com.apple.driver.AppleARMWatchdogTimer",
-  "com.apple.driver.AppleEffaceableStorage",
-  "com.apple.driver.AppleMobileFileIntegrity",
-  "com.apple.driver.ApplePMGR",
-  "com.apple.driver.IODARTFamily",
-  "com.apple.filesystems.apfs",
-  "com.apple.iokit.IOCryptoAcceleratorFamily",
-  # The boot log now reaches "IOsurfaceRoot:installMemoryRegions()" and stops, so
-  # IOSurface is needed. It was removed earlier to avoid duplicating
-  # IOSurfaceFamily; with IOMobileGraphicsFamily already dropped, only IOGPUFamily
-  # pulls that dependency, so adding IOSurface back should not reintroduce the
-  # duplicate OSMetaClass registration.
-  "com.apple.iokit.IOSurface",
-  "com.apple.iokit.IOGPUFamily",
-  # Removed com.apple.iokit.IOMobileGraphicsFamily: it and IOGPUFamily both depend on
-  # IOSurfaceFamily, and native_prelink.plan() uses a plain list for its work queue,
-  # so the shared dependency is packed once per puller and OSMetaClass rejects the
-  # duplicate class. IOGPUFamily still pulls IOSurfaceFamily in a single time.
-  "com.apple.iokit.IOReportFamily",
-  # Removed com.apple.iokit.IOStorageFamily: it is already pulled in by
-  # com.apple.filesystems.apfs, and native_prelink.plan() walks roots with a plain
-  # list, so a root that is also a dependency gets packed twice.
-  # Removed com.apple.iokit.IOSurface: both it and IOGPUFamily pull in
-  # IOSurfaceFamily, so prelink packs that kext twice and OSMetaClass panics with
-  # "Kext ... class ... is a duplicate". IOGPUFamily still brings IOSurfaceFamily
-  # in once, which is enough for the graphics stack.
-  # pthread_shims.c aborts with "pthread kernel extension not loaded (function table)"
-  # unless com.apple.kec.pthread is prelinked: it supplies the pthread function table
-  # the shims call through.
-  "com.apple.kec.pthread",
-  "com.apple.kec.Libm",
-  "com.apple.kec.corecrypto",
-  "com.apple.kext.AppleMatch",
-  "com.apple.kext.CoreTrust",
-  "com.apple.security.AppleImage4",
-  "com.apple.security.sandbox",
-  "com.apple.iokit.IOHIDFamily",
-]
+    "com.apple.AppleFSCompression.AppleFSCompressionTypeZlib",
+    "com.apple.driver.AppleARMPlatform",
+    "com.apple.driver.AppleARMWatchdogTimer",
+    "com.apple.driver.AppleAudioClockLibs",
+    "com.apple.driver.AppleEffaceableStorage",
+    "com.apple.driver.AppleIISController",
+    "com.apple.driver.AppleM2ScalerCSCDriver",
+    "com.apple.driver.AppleMobileFileIntegrity",
+    "com.apple.driver.ApplePMGR",
+    "com.apple.driver.IODARTFamily",
+    "com.apple.filesystems.apfs",
+    "com.apple.iokit.CoreAnalyticsFamily",
+    "com.apple.iokit.IOAVFamily",
+    "com.apple.iokit.IOAudio2Family",
+    "com.apple.iokit.IOCECFamily",
+    "com.apple.iokit.IOCryptoAcceleratorFamily",
+    "com.apple.iokit.IOGPUFamily",
+    "com.apple.iokit.IOHDCPFamily",
+    "com.apple.iokit.IOMobileGraphicsFamily",
+    "com.apple.iokit.IOReportFamily",
+    "com.apple.iokit.IOSlowAdaptiveClockingFamily",
+    # The UFS block class registers into this family. Removing it to avoid a duplicate-class
+    # report also removed the only place a root device could appear.
+    "com.apple.iokit.IOStorageFamily",
+    "com.apple.iokit.IOSurface",
+    "com.apple.kec.Libm",
+    "com.apple.kec.corecrypto",
+    "com.apple.kext.AppleMatch",
+    "com.apple.kext.CoreTrust",
+    "com.apple.security.AppleImage4",
+    "com.apple.security.sandbox",
+    "com.apple.iokit.IOHIDFamily",
+    "com.apple.iokit.IOHIDEventDriver",
+  ]

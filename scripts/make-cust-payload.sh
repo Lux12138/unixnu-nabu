@@ -56,6 +56,10 @@ initrd = "Payloads/ramdisk.img"
 #
 #   -v serial=3 debug=0x14e   early kernel output
 #   kextlog=0xfff             verbose kext logging -- names the kext that stops loading
+#   native-ufs-root=1        publish the UFS block class as the root device
+#   native-ufs-allow-unverified=1
+#                            adopt the running controller without the verified-root
+#                            policy bundle; UniXNU-uke mounts its root this way
 #   kt_fixed_zones=120        fixed trace zone count, as sheng uses
 #   -no_slto_panic            suppress the SLTO panic
 #   amfi_get_out_of_my_way=1  run without AMFI enforcement (diagnostic boot only per the
@@ -63,7 +67,7 @@ initrd = "Payloads/ramdisk.img"
 #
 # boot-progress is deliberately absent: it requires CONFIG_XNU_NATIVE_UFS=1, which
 # collides with the IOBlockStorageDevice that apfs pulls in through IOStorageFamily.
-args = "-v serial=3 debug=0x14e kextlog=0xfff kt_fixed_zones=120 -no_slto_panic amfi_get_out_of_my_way=1 rd=md0"
+args = "-v serial=3 debug=0x14e kextlog=0xfff kt_fixed_zones=120 -no_slto_panic amfi_get_out_of_my_way=1 rd=md0 native-ufs-root=1 native-ufs-allow-unverified=1"
 TOML
 
 rm -f "$OUT"
