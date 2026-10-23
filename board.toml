@@ -53,7 +53,10 @@ archives = [
 
 [payload.adt]
 tool = "scripts/make-nabu-adt.py"
-chip_id = "207"
+# chip_id is deliberately absent. make-nabu-adt.py only accepts --unique-chip-id together with
+# --chip-id, and the payload that boots today carries neither, so supplying chip_id alone fails:
+#   error: --unique-chip-id and --chip-id must be supplied together
+# The ADT identifies the platform through arm-io/product, not through a chip id.
 # Measured 2026-10-20 via TWRP: /proc/meminfo MemTotal = 11766512 kB
 # (12 GiB = 12582912 kB minus ~816 MB reserved for modem/hyp/rmtfs) => physical 12 GiB.
 # darwinboot-memory-size: the contiguous window DarwinBoot asks the firmware for.
