@@ -152,6 +152,43 @@ jobs:
           # The object tree is large; do not fail the run if the cache is unavailable.
           fail-on-cache-miss: false
 
+      - name: Bootstrap kernel and prelinked candidate
+        # The archive builders that bind against the "original candidate"
+        # (build-native-legacy-display.py, build-ufs-original-bindings.py) read a prelinked kernel
+        # from build/native-prelink. A cold checkout has none, so produce one first: this pass
+        # builds a kernel with functions off and then copies it into the candidate names.
+        run: |
+          cd UniXNU
+          # bootstrap configuration: no CONFIG_XNU_BUILD_ARCHIVES, so this pass produces only the
+          # compile records and one kernel. Running the archive list here would recurse -- the
+          # archives are what need the candidate this pass is creating.
+          ./unixnu defconfig nabu_bootstrap_defconfig -D "$GITHUB_WORKSPACE"
+          ./unixnu build kernel -D "$GITHUB_WORKSPACE"
+          if [ -f out/nabu/kernel/kernel.macho ]; then
+            mkdir -p out/nabu/tree/build/native-prelink
+            cp out/nabu/kernel/kernel.macho \
+               out/nabu/tree/build/native-prelink/native-owner-mobile-graphics-candidate.macho
+            cp out/nabu/kernel/kernel.json \
+               out/nabu/tree/build/native-prelink/native-owner-mobile-graphics-candidate.json
+            cp out/nabu/kernel/kernel.macho \
+               out/nabu/tree/build/native-prelink/native-owner-ufs-cpu-desktop-v9-hid-init-candidate.macho
+            cp out/nabu/kernel/kernel.json \
+               out/nabu/tree/build/native-prelink/native-owner-ufs-cpu-desktop-v9-hid-init-candidate.json
+            # Do not leave the bootstrap kernel where the artifact step would pick it up.
+            rm -f out/nabu/kernel/kernel.macho out/nabu/kernel/kernel.json
+            ls -l out/nabu/tree/build/native-prelink/ || true
+          else
+            echo 'bootstrap kernel not produced; continuing'
+          fi
+        continue-on-error: true
+
+      - name: Restore the real configuration
+        # The bootstrap pass above selected nabu_bootstrap_defconfig; put the shipping
+        # configuration back before the real build.
+        run: |
+          cd UniXNU
+          ./unixnu defconfig nabu_defconfig -D "$GITHUB_WORKSPACE"
+
       - name: Build kernel
 
         run: |

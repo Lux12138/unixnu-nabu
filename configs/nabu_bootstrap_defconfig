@@ -1,0 +1,20 @@
+# nabu_bootstrap_defconfig
+# The first pass of a cold build. It exists only to produce the compile records under
+# build/xnu/ and one prelinked kernel, which the archive builders that need an "original
+# candidate" then read as their baseline:
+#
+#   FileNotFoundError: build/native-prelink/native-owner-mobile-graphics-candidate.macho
+#
+# CONFIG_XNU_BUILD_ARCHIVES is deliberately absent so this pass does not run the board archive
+# list -- the archives are exactly what needs the candidate, so running them here would recurse.
+# Same role as configs/bootstrap_defconfig in UniXNU-uke.
+
+CONFIG_XNU_SOURCE_CORECRYPTO14=y
+CONFIG_XNU_ARM_DT_PLATFORM=y
+CONFIG_XNU_ARMCPU=y
+CONFIG_XNU_NATIVE_ARCH_TIMER=y
+CONFIG_XNU_NATIVE_PAN=y
+CONFIG_XNU_DT_PANIC_REGION=y
+CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
+CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
+CONFIG_XNU_ARMVIRT_PLATFORM=n
