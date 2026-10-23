@@ -57,6 +57,11 @@ initrd = "Payloads/ramdisk.img"
 #   -v serial=3 debug=0x14e   early kernel output
 #   kextlog=0xfff             verbose kext logging -- names the kext that stops loading
 #   native-ufs-root=1        publish the UFS block class as the root device
+#   sheng-data-persist=2     let native_ufs_store_open() wait for the store geometry so the
+#                            Data overlay activates and /private/var is writable
+#   sheng-smp=0              single CPU; uke found SMP was what triggered its silent resets
+#   wdt=-1                   keep the in-kernel watchdog from biting during bring-up
+#   sheng-disable-watchdogd=1  stop userland watchdogd from resetting the device
 #   native-ufs-allow-unverified=1
 #                            adopt the running controller without the verified-root
 #                            policy bundle; UniXNU-uke mounts its root this way
@@ -67,7 +72,7 @@ initrd = "Payloads/ramdisk.img"
 #
 # boot-progress is deliberately absent: it requires CONFIG_XNU_NATIVE_UFS=1, which
 # collides with the IOBlockStorageDevice that apfs pulls in through IOStorageFamily.
-args = "-v serial=3 debug=0x14e kextlog=0xfff kt_fixed_zones=120 -no_slto_panic amfi_get_out_of_my_way=1 rd=md0 native-ufs-root=1 native-ufs-allow-unverified=1"
+args = "-v serial=3 debug=0x14e kextlog=0xfff kt_fixed_zones=120 -no_slto_panic amfi_get_out_of_my_way=1 rd=md0 native-ufs-root=1 native-ufs-allow-unverified=1 sheng-data-persist=2 sheng-smp=0 wdt=-1 sheng-disable-watchdogd=1"
 TOML
 
 rm -f "$OUT"
