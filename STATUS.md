@@ -551,6 +551,50 @@ fastboot flash userdata out/nabu/userdata/userdata-root.img
 
 
 
+
+> ### 本轮的终点：用户空间缺页无法修复（VM/PMAP 层）
+>
+> 从 `B returned1` 之后，内核进到 `launchd` 的 `execve`，然后在这条路径上 panic：
+>
+> ```
+> ESR = 0x96000045     Data Abort, WnR=1(写), DFSC=0x5(translation fault L1)
+> PC  = __bcopyout + 0x1c
+> LR  = _copyout + 0x70
+> FAR = ustk - 328     落在用户栈分配区间内
+> ```
+>
+> 逐层排除的结果：
+>
+> | 已验证 | 结论 |
+> |---|---|
+> | `cpo0`（exec_copyout_strings） | 成功 —— 栈顶几页可用 |
+> | `cp20`（dynlinker copyoutptr） | 成功 |
+> | `prt16384` | 不是 `size - rlimit` 下溢，protect 正常 |
+> | `freepg 91199444` / `wirepg 945550` | **都超过物理页数（12 GiB ≈ 78 万页）**，页统计不可信 |
+> | 提前调用 `exec_prefault_data` | 无效 —— 它只 prefault 数据段，不含栈 |
+> | 在 `ap` 上直接 `copyout` 一字节 | **本身 panic，没有返回错误** |
+>
+> **结论：不是地址算错、不是栈太小、不是内存耗尽，而是「用户空间缺页时内核不修页，直接 data abort」。**
+> 正常内核里 `copyout` 触发缺页会由 `vm_fault` 现场建页后重试指令；这里它变成 panic。
+>
+> ### 下一轮的三条线索（同一个根）
+>
+> 1. **`MACHINE_CONFIGS=BCM2837`** —— 树莓派配置用于 SM8150，ARM64 pmap 的细节（页表属性、
+>    `pmap_enter` 的 `VM_MEMORY_STACK` 分支）可能与真机要求不同；
+> 2. **`copyout` 的 fault 恢复路径** —— `user_access` 异常表项是否注册正确（`fault_addr`）;
+> 3. **`vm_page_bootstrap` 拿到的内存尺寸不对** —— 页统计超出物理内存，会连带影响 pmap 分配页表页。
+>
+> 三者指向同一件事：**VM/PMAP 在「非标准 ARM64 平台配置」下的初始化不完整。** 本轮的价值是把它从
+> 「完全看不见」变成「精确到层」。
+>
+> ### 验证工具的三个坑（各踩过）
+>
+> | 坑 | 后果 | 正解 |
+> |---|---|---|
+> | `strings` 默认 ≥4 字符 | 2 字符探针标签看似不存在 | `strings -n 2` |
+> | `nabu_mark_text` 每行清 61px | 行距 <61px 的标记互相擦除 | 行距 ≥80px |
+> | xnu 目标文件是 `.cpo` | 改源码不重编 | 删 `.cpo` 不是 `.o` |
+
 > ### 🎯 突破：根卷找到，launchd 出现（B returned 1）
 >
 > ```
