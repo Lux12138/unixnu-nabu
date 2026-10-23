@@ -86,6 +86,55 @@ sha256          c756ecdb88a9dd50156dc27d2cdf48a08ddf93fcf204040fa57804f814fc3c15
 18  mockfs 双重链接（23 个重复符号）  → 去掉 force_load
 ```
 
+
+## 给 `.cache/xnu-work` 里的文件打补丁：六个必踩的坑
+
+`unixnu tree` 每次都把 `.cache/xnu-work` reset 到 `d8b8029` 再按文件名顺序应用
+`patches/xnu/*.patch`，所以**手工改工作树一定会被覆盖**，必须做成 patch。而 patch 本身有六个坑，
+这次全踩了一遍：
+
+| 坑 | 症状 | 正解 |
+|---|---|---|
+| 每个 hunk 都带一对 `--- / +++` | `git apply` 当成多个文件，输出多次 `Checking patch` | **一个文件头，hunk 堆叠** |
+| 空行上下文写成真空行 | `patch` 报 `fuzz`，`git apply` 直接拒绝 | **` ` + 换行**（一个空格）|
+| hunk 只有 2 行上下文 | `git apply` 默认不 fuzz | **至少 3 行**，实践中给 6–12 行 |
+| 行号按干净检出的文件算 | `failed at 801` / `924` | **量「前面所有 patch 应用后」的位置** |
+| 起点假设有注释块 | `bsd_autoconf(void)` 上面并没有 `/**` | 从 `kern_return_t` 开始 |
+| 跳过中间某个 `#if` 块 | `#endif` 后其实还有 4 行 `XNU_NATIVE_OFFLINE_GPU` | 上下文截到 `#endif` 就停 |
+
+### 怎么量真实行号
+
+`unixnu tree` 失败时，`.cache` 正好停在「所有前面的 patch 已应用、当前这个未应用」的状态 ——
+这就是要量的目标：
+
+```python
+import io
+src = io.open('.cache/xnu-work/bsd/kern/bsd_init.c', encoding='utf-8').read().split('\n')
+for needle in ('calling bsd_autoconf', 'bsd_autoconf(void)', 'kminit();'):
+    print(needle, [i + 1 for i, l in enumerate(src) if needle in l][:5])
+```
+
+本次实测值（前面 patch 全部应用后）：
+
+```
+' * Version 2.0.'         80
+'#include <sys/param.h>'  83
+calling sysctl_mib_init  912
+calling bsd_autoconf     924
+bsd_autoconf(void)      1291     ← 323 是前置声明，不是定义
+kminit();               1294
+```
+
+### 验证补丁能应用，别靠构建
+
+```bash
+cd .cache/xnu-work
+git apply --check /path/to.patch && git apply /path/to.patch
+grep -n 'NABU:' bsd/kern/bsd_init.c
+```
+
+**注意不要先 `git checkout --` 那个文件** —— 那会把它还原成 pristine，行号又变回另一套。
+
 ## 下一步
 
 **唯一缺的是一份真正的根文件系统。**
