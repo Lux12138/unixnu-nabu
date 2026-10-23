@@ -549,6 +549,61 @@ fastboot flash userdata out/nabu/userdata/userdata-root.img
 
 
 
+
+> ### 今晚的完整链路（从静默到精确失败）
+>
+> 起点：屏幕一片白字、六行探针不动、完全不知道内核停在哪。
+> 终点：`mountroot` 整条路径跑完并给出 panic —— 「明确的失败」比任何静默都有价值。
+>
+> ```
+> Failed to mount "root" device 2f5a?d      ← panic 输出（IOKitBSDInit.cpp）
+>
+> clock:advances      时基正常
+> host:lun            UFS 命令链全通（NOP / 电源查询 / START STOP UNIT / LUN ready）
+> ufs:entered         NativeUfs::start 通过三道检查
+> prep:attach-done    configure + attach 成功
+> keys2               匹配表 = IOMedia + UUID（正确形状）
+> media:no-uuid       无签名身份，跳过 UUID 等待
+> walk402             200 次轮询 × 2 个服务，正常退出
+> guard1              类名匹配（非 exact）
+> IOFindBSDRoot entered
+> B returned0         200 次遍历，无 IOMedia 带目标 UUID
+> ```
+>
+> ### 逐项修复（按发现顺序）
+>
+> | 现象 | 真因 | 处理 |
+> |---|---|---|
+> | 屏幕只有白字，一个探针都不动 | `NativeUfs::start()` 缺 `native-ufs-root=1`，第一行就 return false | ADT `boot-args` 补上，并加 `native-ufs-diagnostics=1` |
+> | 所有探针都画在 console 区被白字压住 | 行号 1240–1640 全在 `g_h-780` 以内 | 全部搬到 1780 以下，间距 ≥ 80px（每行清 61px） |
+> | 卡在 `host:nop` 一分钟 | `IODelay()` 内部等 `mach_absolute_time()`，而命令确实没完成 | 换 timer-free `yield` 自旋 + 轮询计数 |
+> | 有超时代码却从不触发 | 同上，`expired()` 依赖同一把钟 | `pollUfsTransfer` 加 100 万次上限 |
+> | 块设备不发布 | `validate()` 在非 verified 构建里无条件 `return false` | bring-up 期间打开（原文注释：Root publication requires owner verification in every build）|
+> | `B returned` 永不出现 | `waitForService` 睡线程等中断唤醒，而睡眠在此阶段不工作 | 换成忙等轮询 `getMatchingServices` |
+> | 轮询不退出（walk 涨到 4 万） | `mach_absolute_time()` 单位不是纳秒，`+5e9` 等于几千秒 | 改成 200 次尝试封顶 |
+>
+> ### 剩下的唯一问题
+>
+> **`IOStorageFamily` 没有把块设备变成可挂载的卷。** 请求正确（`keys2`）、遍历跑满（`walk402`）、
+> 结果为空（`B returned 0`），于是 `mountAttempts` 累加到 10 后 panic。
+>
+> 最可能的原因：缺少配对的 **`IOBlockStorageDriver`**。`NativeUfsBlock` 只实现了
+> `IOBlockStorageDevice` 接口，而没有驱动去枚举它上面的介质并解析 APFS 容器头 —— 所以永远不会出现
+> 带 UUID 的 `IOMedia`。
+>
+> 下一步的判据（一次启动即可区分）：枚举所有 `IOMedia` 并打印其 `UUID` 属性
+>
+> | 结果 | 结论 |
+> |---|---|
+> | 一个 IOMedia 都没有 | 缺 `IOBlockStorageDriver`（最可能）|
+> | 有 IOMedia 但 UUID 不同 | 把实际 UUID 写进 `[payload.adt]` 的 `root_match_volume_uuid` |
+> | 有 IOMedia 且 UUID 正好匹配 | 匹配逻辑本身有 bug |
+>
+> ### 两个验证工具的坑（各踩两次）
+>
+> 1. `strings` 默认只输出 ≥4 字符，2 字符的探针标签（`tA`/`tD`）看起来「不在内核里」。**必须 `strings -n 2`。**
+> 2. xnu 的 C++ 目标是 `.cpo` 不是 `.o`；只删 `.o` 会导致改了源码不重编。
+
 > ### 里程碑：UFS 命令链全通（host:lun）
 >
 > ```
