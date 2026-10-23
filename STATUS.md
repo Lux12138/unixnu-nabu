@@ -176,6 +176,99 @@ strings out/nabu/kernel/kernel.macho | grep '^NABU: ' | sort -u
 `#if` 整体为假，`nm kernel.macho | grep native_offline_gpu` 是 0 次。它的源码在
 `drivers/NativeMetal/NativeOfflineGPU.cpp`，但这份内核里没有它。
 
+
+## 这一轮我反复犯的错（写给下次的自己）
+
+这一晚在 `bsd_init.c` 的探针上耗了十几轮构建，**没有一次是内核的问题，全部是流程问题**。
+逐条记下来，下次不再犯。
+
+### 1. 同一个动作重复十几次而不换方法
+
+每次都是「猜行号 → 写 diff → 构建 70 秒 → 失败」，持续了十几轮。
+
+**`git apply` 对偏移过大的 hunk 是静默丢弃的**，不报错也不失败。所以「构建成功」不等于
+「patch 应用了」。我直到用 `strings kernel.macho | grep NABU` 数出来一直是 **13 个**而
+不是 14 个，才发现 `vfs_mountroot` 那个 hunk 从来没进去过。
+
+**规则：同一个工具失败三次就换方法，不要继续调参。** 最后改成按唯一锚点插入文本
+（`scripts/nabu-bsd-init-probes.py`），一次成功，而且幂等。
+
+### 2. 不先验证就构建
+
+改完 patch 应该先 `git apply --check`，我却直接构建，用 70 秒换一个「还是不行」。
+
+**规则：能在一秒内验证的事，不要用一分钟的构建去验证。**
+
+### 3. 行号量错了对象
+
+我量的是「我的 patch 已经应用之后」的位置，却当成「应用之前」的基线写进 diff。
+更糟的是中途换了三次参考状态（pristine / `unixnu tree` 之后 / build 失败之后），
+每次得到的数字都不一样：
+
+```
+pristine                      calling bsd_autoconf = 816
+unixnu tree 之后（没打 patch）  = 816
+build 失败之后（有前面 64 个）  = 924
+我的 patch 应用之后            = 925
+```
+
+**规则：写 diff 前先明确「我要的是哪一个状态的坐标」，并在同一次测量里取全部锚点。**
+
+### 4. WSL 里用 Windows 路径
+
+`generate_patch.py` 里写 `r'C:\Users\...'`，在 WSL 里那是**字面文件名**，于是新 patch
+写进了一个叫 `C:\Users\...` 的怪文件，真正的 patch 一个字都没变，构建自然还是旧的。
+
+**规则：WSL 里一律 `/mnt/c/...`。**
+
+### 5. 改了文件没提交，WSL 的 `reset --hard` 就把它吃掉了
+
+出现过至少三次。`build` 脚本第一步就是 `git reset --hard FETCH_HEAD`。
+
+**规则：改完立刻 commit + push，再让 WSL 拉。**
+
+### 6. 把「探针不存在」当成「探针没输出」
+
+我说过「`NABU: loopattach` 没出来，所以卡在 loopattach」——
+**那条探针当时根本不存在**。判断「某条日志没出现」之前，必须先确认它在二进制里。
+
+**规则：`strings kernel.macho | grep '^NABU: '` 数一遍，再解读屏幕。**
+
+### 7. 追 `IOsurfaceRoot` 的源码
+
+花时间在树里搜 `installMemoryRegions`，只搜到二进制。
+`nm kernel.macho` 里其实**一个 `iosurfaceroot` 符号都没有** —— 它来自预链接进
+`kernelcache.decompressed` 的 Apple kext，改不了。用户直接叫停了这条死路。
+
+**规则：先 `nm`/`strings` 确认符号归属，再决定要不要找源码。**
+
+### 8. 为了「对齐别人」把已验证的值改坏
+
+把 `darwinboot-memory-size` 从 4.75 GiB 改成 1PJL 的 512 MiB，直接从「走到 launchd」
+退回到「卡在 `kminit`」。那是 6 GiB 机型的值，而这台是 **12 GiB 扩容机**。
+
+**规则：能跑通的配置别动。别人的参数要按自己机器的物理内存换算。**
+
+### 9. 忽略了构建缓存
+
+改了 patch，但 `bsd_init.o` 因为 `OWNER_ROOT_STAMP` 没变而没重编，探针自然进不去。
+
+**规则：动 `bsd_init.c` 就必须 `find build -name 'bsd_init.o' -delete`。**
+
+### 10. 每次 `unixnu tree` 都会清掉 `.cache/xnu-work` 里的手工改动
+
+包括 DriverKit 头（`IORPC.h`），于是 `archive-03` 报 `IORPC.h file not found`。
+现在统一入口 `build_one.sh` 里会自动补，但这条要记住。
+
+### 最终形态
+
+```bash
+bash scripts/nabu-bsd-init-probes.py .cache/xnu-work/bsd/kern/bsd_init.c
+```
+
+按锚点插入，输出每一处 `insert` / `skip`，重复运行安全。
+`build-xnu-4k-baseline.sh` 在 patch 循环之后调用它。
+
 ## 下一步
 
 **唯一缺的是一份真正的根文件系统。**
