@@ -36,11 +36,13 @@ archives = [
   "build-arm-driver.py ArmDTPlatform",
   "build-arm-driver.py ArmCpu",
   "build-arm-driver.py NativeAES",
+    # Produces build/storage-abi/include, which build-arm-driver.py adds to the
+    # include path for NativeUfs / NativeVirtioBlock / NativeRamBlock.
+    "audit-storage-interface.py",
   "build-arm-driver.py NativeUfs",
   # mockfs needs its fixture object; without it the file system code is present but the
   # mount path has no fixture to build against.
   "build-mockfs-fixture.py",
-  "audit-storage-interface.py",
 ]
 
 [payload.adt]
