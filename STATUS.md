@@ -547,6 +547,58 @@ fastboot flash userdata out/nabu/userdata/userdata-root.img
 >    而那条路需要 verified-root bundle，bundle 需要 target image 的 volume policy。
 
 
+
+> ### 里程碑：块设备完整发布（walk 3 → 5）
+>
+> ```
+> ufs:entered
+> prep:attach-done     ← configure + attach 全部通过
+> start:ok             ← registerService() 被调用
+> media:no-uuid        ← 无签名身份时跳过 UUID 等待
+> keys1
+> walk5                ← 1 个 IODTNVRAM + 2 个 provider + 2 个 IOMedia
+> guard2
+> IOFindBSDRoot entered
+> A call wfs
+> ```
+>
+> `NativeUfsBlock` 的完整生命周期第一次走通：分配 → init → configure（窗口几何校验）→ attach →
+> `start()` → `registerService()`。两个窗口（OS / SystemOS）都注册成功。
+>
+> ### 决定性的修复：`IODelay` 死等
+>
+> 在此之前，所有「卡住」其实卡在等待函数本身，而不是等待的条件：
+>
+> ```c
+> void delay ()   { IODelay (2); }                            // 内部 spin 等 mach_absolute_time 前进
+> bool expired () { return mach_absolute_time () >= deadline; } // 同一把钟
+> ```
+>
+> 在这个启动阶段 `mach_absolute_time()` 不前进，于是 `IODelay` 第一次调用就永不返回。这解释了三个
+> 现象同时出现：有超时代码却卡满一分钟、`rootDiagnosticFailure("NOP OUT")` 从不被调用（1810 空白）、
+> 连 `native-ufs-diagnostics=1` 的 panic 都发不出来。后来加的 100 万次轮询上限也没用——循环体第一步
+> 就没返回。
+>
+> 现在命令路径上没有任何计时器依赖：
+>
+> | 位置 | 原实现 | 现在 |
+> |---|---|---|
+> | `HardwareTransferPort::delay` | `IODelay(2)` | 200 次 `yield` 自旋 |
+> | `hostWaitRegister` 节拍 | `IODelay(10)` | 400 次 `yield` 自旋 |
+> | `hostWaitRegister` 循环 | `while (mach_absolute_time() < deadline)` | `for (round < 20000)` |
+> | `pollUfsTransfer` 循环 | 仅 `expired()` | `+ polls >= 1000000` |
+>
+> 注意 `-Werror,-Wdeprecated-volatile`：自旋计数器不能带 `volatile` 限定符（`++` 对 volatile 已弃用），
+> 循环体里的 `asm volatile` 足以阻止优化。
+>
+> ### 现在只剩一个问题：UUID 不匹配
+>
+> `A call wfs` 之后仍无 `B returned`，即 `waitForService(IOMedia + UUID=04769D26-…)` 未返回。
+> 块设备已经存在（walk5），所以问题收窄为：**发布的 IOMedia 带不带那个 UUID**。
+>
+> UUID 由 IOStorageFamily 从 APFS 容器头读出，不是窗口自带的属性。下一步要确认的是窗口几何与
+> `userdata-root.img` 的实际布局是否一致（`offset=1048576` / `size=6077546496`）。
+
 > ### 里程碑：根窗口终于发布了（walk 1 → 3）
 >
 > ```
