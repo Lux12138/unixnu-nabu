@@ -49,7 +49,12 @@ path = "Payloads/kernel.macho"
 # -v/debug=0x14e turn on STARTUP_DEBUG_VERBOSE: kernel_startup_log() then calls
 # kprintf once startup_phase passes STARTUP_SUB_KPRINTF, and kprintf before the
 # console exists is what stopped the boot at checkpoint 50. Keep the args minimal.
-# rd=md0 makes the RAM disk /dev/md0, which mockfs mounts as the root.
+#
+# rd=md0 is gone on purpose. It told the kernel to take the empty 4 MiB RAM disk as
+# /dev/md0, which mockfs then mounted as the root -- so /sbin/launchd was looked for in
+# a blank filesystem and every boot ended at "errno 2". The real root is the OS volume
+# on UFS, selected through /chosen/root-matching in the ADT. The initrd stays because
+# the ADT still declares a RAMDisk node and DarwinBoot validates the two agree.
 initrd = "Payloads/ramdisk.img"
 # Arguments taken from the documented debugging table in /xnu/boot-arguments, not
 # invented here:
@@ -72,7 +77,7 @@ initrd = "Payloads/ramdisk.img"
 #
 # boot-progress is deliberately absent: it requires CONFIG_XNU_NATIVE_UFS=1, which
 # collides with the IOBlockStorageDevice that apfs pulls in through IOStorageFamily.
-args = "-v serial=3 debug=0x14e kextlog=0xfff kt_fixed_zones=120 -no_slto_panic amfi_get_out_of_my_way=1 rd=md0 native-ufs-root=1 native-ufs-allow-unverified=1 sheng-data-persist=2 sheng-smp=0 wdt=-1 sheng-disable-watchdogd=1"
+args = "-v serial=3 debug=0x14e kextlog=0xfff kt_fixed_zones=120 -no_slto_panic amfi_get_out_of_my_way=1 native-ufs-root=1 native-ufs-allow-unverified=1 sheng-data-persist=2 sheng-smp=0 wdt=-1 sheng-disable-watchdogd=1"
 TOML
 
 rm -f "$OUT"
