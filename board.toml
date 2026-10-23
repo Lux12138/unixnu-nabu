@@ -63,6 +63,12 @@ owned_memory_size = "0x20000000"
 dram_size = "0x300000000"
 cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"
 packed_data_ramdisk = true
+# /chosen/root-matching: XNU selects the IOMedia whose UUID matches this string.
+# This is the OS volume from 044-76040-038.dmg -- the one that carries /sbin/launchd.
+# Read out of 7z l -slt: vol_uuid 04769d262ca04825b443e2e5f88300f2.
+# SystemOS is 8846fe7829104297af97d59bb6f8fc16; it is the cryptex the OS volume draws
+# extra system content from, not the root itself.
+root_match_volume_uuid = "04769d26-2ca0-4825-b443-e2e5f88300f2"
 ipad_identity = true
 unique_chip_id = "required"          # the platform seed is not stored in any repository
 
