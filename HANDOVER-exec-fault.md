@@ -113,7 +113,7 @@ _bcopyout                     0xfffffff00740eb44
 
 ---
 
-## 七、最可能的下一个原因：内核 slide 让 offset 算错
+## 七、已排除：内核 slide 不会让 offset 算错
 
 `find_copyio_recovery_entry` 的算法是：
 
@@ -127,37 +127,29 @@ copyio_recovery_offset(uintptr_t addr)
 
 **它用「运行时 PC」减去「`copyio_recover_table` 符号值」。**
 
-如果两者处在**同一个 slide 空间**，差值不变，一切都对。但如果符号值取的是**链接地址**（未 slide），
-而 PC 是**运行时地址**（已 slide），差值就会带上 slide 量，落不进任何 `[cre_start, cre_end)`。
+### 为什么它不成立
 
-本机 `board.toml` 的 `[kernel.prelink]` 里有：
+两端处在同一 slide 空间，差值自动抵消：
 
-```toml
-slide = "-0x1000000"      # 16 MiB 负 slide
-```
+| 端 | 来源 | 是否含 slide |
+|---|---|---|
+| `get_saved_state_pc(state)` | 运行时 PC | 是（已 slide） |
+| `(uintptr_t)copyio_recover_table` | C 取符号地址，编译为 `adrp/add` | 是（运行时自动 slide） |
+| `cre_start` / `cre_end` | 汇编 `.quad Lcre_start - _copyio_recover_table` | 否（链接期常量） |
 
-**这与「表完整、理论范围包含 PC、`recover` 却是 0」完全吻合。** 表项里的 offset（`0x2b7022..0x2b7056`）
-是链接期算出来的，本身不含 slide；而 PC 是运行时值。
+前两者相减，slide 抵消；结果与第三类同量纲。**本机虽然 `slide = "-0x1000000"`，但这不影响该算法。**
 
-### 验证方法（探针已布好）
+### 因此 `recover == 0` 只剩三种可能
 
-`PCOF`（1980 行）画的就是 `copyio_recovery_offset(PC)`：
-
-| `PCOF` 值 | 判定 |
+| 可能 | 判据（`PCOF` 探针已布在 1980 行） |
 |---|---|
-| 落在 `0x2b7022..0x2b7056` | offset 正常 → 查表逻辑另有问题 |
-| **是 `0x2b7032 ± 0x1000000` 量级的巨大值** | **slide 混入，确认** |
-| 完全对不上的其他值 | 表基址取错 |
+| PC 真的落在所有范围之外 | `PCOF` 是可读的小值，但不在任何 `[cre_start, cre_end)` 内 |
+| `find_copyio_recovery_entry` 的循环没执行 | `TB`（2060 行）为 0 或等于 `_end` |
+| fault 不是从这个 PC 报的 | `PCOF` 与 `_bcopyout+0x1c` 的预期 offset（`0x2b7032`）差很远 |
 
-### 如果确认，修法
-
-两条路，都不改汇编：
-
-1. **让 offset 计算用 slide 后的基址** —— 即比较时对 `copyio_recover_table` 取
-   `VM_KERNEL_UNSLIDE` 或反之，保证两端同一空间；
-2. **改 `cre_start` / `cre_end` 的生成方式** —— 在宏里对 `Lcre_start_\@` 和 `end_addr` 先做同一变换。
-
-第 1 条改动面最小，只动 `copyio_recovery_offset` 一处。
+**预期值可以手算：`_bcopyout = 0xfffffff00740eb44`，加 `0x1c` 得
+`0xfffffff00740eb60`；减去表基址 `0xfffffff007157b2e` 得 `0x2b7032`。第 9 条表项范围
+`0x2b7022..0x2b7056` 正好包含它。** 所以若 `PCOF == 0x2b7032` 而 `RV == 0`，问题就在查表循环本身。
 
 ## 六、状态速查
 
