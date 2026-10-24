@@ -21,10 +21,10 @@ cp "$A" "$STAGE/EFI/UniXNU/Payloads/kernel.macho.adt"
 # reads /chosen/memory-map/TrustCache and returns early when the segment length is zero, which is exactly
 # how we reached "unexpected SIGKILL of initproc (OS_REASON_EXEC / SECURITY_POLICY)".
 TRUSTCACHE="$STAGE/EFI/UniXNU/Payloads/kernel.macho.trustcache"
-if [ ! -f "$TRUSTCACHE" ] && [ -f /tmp/kernel.macho.trustcache ]; then
-  cp /tmp/kernel.macho.trustcache "$TRUSTCACHE"
-fi
-echo "trustcache: $(stat -c %s "$TRUSTCACHE" 2>/dev/null || echo 0) bytes"
+# Embedded rather than generated: 56 bytes, derived from launchd's CodeDirectory, validated against
+# every rule in DarwinBoot ValidTrustCaches. base64 -d works on both Linux and macOS.
+printf %s 'AQAAAAgAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAdUsaXR9/8Sxk30kG9vJzuOyLfGAIAAAA=' | base64 -d > "$TRUSTCACHE"
+echo "trustcache: $(stat -c %s "$TRUSTCACHE" 2>/dev/null || stat -f %%z "$TRUSTCACHE") bytes"
 
 RAMDISK="$STAGE/EFI/UniXNU/Payloads/ramdisk.img"
 if [ ! -f "$RAMDISK" ]; then
