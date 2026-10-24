@@ -151,6 +151,87 @@ copyio_recovery_offset(uintptr_t addr)
 `0xfffffff00740eb60`；减去表基址 `0xfffffff007157b2e` 得 `0x2b7032`。第 9 条表项范围
 `0x2b7022..0x2b7056` 正好包含它。** 所以若 `PCOF == 0x2b7032` 而 `RV == 0`，问题就在查表循环本身。
 
+---
+
+## 八、🎯 已定位并修复：PAC 位混进了 copyio 表的 offset 计算
+
+### 决定性实测（`RV` / `PCOF` / `TB` 探针）
+
+```
+RV   = 0                        recover = NULL，查表失败
+PCOF = 0x230397                 算出的 offset
+TB   = 0xfffffff006f6f663       表基址（正常内核地址）
+PC   = 0x1999999800c2bd60       ← 不是内核地址格式！
+LR   = 0x1999999800c18270
+```
+
+**`PC` 是 PAC 签名值。** ARM64 上 `get_saved_state_pc()` 返回的 PC 带指针认证位。
+
+### 根因
+
+```c
+/* sleh.c:299 */
+static inline struct copyio_recovery_entry *
+find_copyio_recovery_entry(arm_saved_state_t *state)
+{
+    ptrdiff_t offset = copyio_recovery_offset(get_saved_state_pc(state));   // ← 少了 strip
+    for (e = copyio_recover_table; e < copyio_recover_table_end; e++) {
+        if (offset >= e->cre_start && offset < e->cre_end) return e;
+    }
+    return NULL;
+}
+```
+
+**`sleh.c` 里其他每一处消费 saved PC 都做了包装：**
+
+| 行 | 写法 |
+|---|---|
+| 700 | `VM_KERNEL_ADDRHIDE(far), VM_KERNEL_UNSLIDE(get_saved_state_pc(state))` |
+| 959 | 同上 |
+| 2350 | `VM_KERNEL_UNSLIDE(get_saved_state_pc(state))` |
+
+**只有 `find_copyio_recovery_entry` 直接用了裸 PC。** 用它减去链接期常量表基址，得到的 offset
+落不进任何 `[cre_start, cre_end)`，`recover` 恒为 NULL，于是每次 copyio 缺页都走 panic 而不是 recovery。
+
+### 修法
+
+```c
+- ptrdiff_t offset = copyio_recovery_offset(get_saved_state_pc(state));
++ ptrdiff_t offset = copyio_recovery_offset(VM_KERNEL_STRIP_PTR(get_saved_state_pc(state)));
+```
+
+**为什么是 `STRIP_PTR` 而不是 `UNSLIDE`：**
+
+```
+copyio_recovery_offset(addr) = addr - (uintptr_t)copyio_recover_table
+```
+
+| 端 | 运行时是否 slide |
+|---|---|
+| `addr`（保存的 PC） | 是 |
+| `copyio_recover_table`（C 取符号，`adrp/add`） | 是 |
+
+**两端都 slide → 相减抵消。所以只需要去掉 PAC 位，不能动 slide。**
+`UNSLIDE` 会额外减去 slide，反而把对齐破坏掉（第一版就是这么写的，已改正）。
+
+### 这一条解释力
+
+**它同时解释了此前所有异常观测：**
+
+| 观测 | 解释 |
+|---|---|
+| 缺页地址合法、在分配区间内 | 地址本身没问题 |
+| 早先几次 copyout 成功 | 那些页已映射，不触发缺页 |
+| 一次 `copyout` 一字节就 panic | 缺页必然经过 `find_copyio_recovery_entry`，必然返回 NULL |
+| `exec_prefault_data` 提前无效 | 它只 prefault 数据段，栈仍缺页 |
+| `vm_page_free_count` 变成 9100 万 | panic 路径的副作用 |
+| 表完整（0x120 字节、12 条） | 表没问题，是查询参数错了 |
+
+### 验证方式
+
+`RV`（1900 行）变成非 0 即修复生效 —— 缺页会被 `handle_kernel_abort_recover` 接住并跳到
+`copyio_error`，`copyoutptr` 返回 `EFAULT` 而不是让内核崩掉。
+
 ## 六、状态速查
 
 **能做什么**：CI + 本地 WSL 构建（72 秒），打包 cust，刷机，真机跑到 `execve` 的 `copyoutptr`。
