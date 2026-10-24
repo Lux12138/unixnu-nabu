@@ -53,9 +53,10 @@ archives = [
     # --unverified is the bring-up mode: adopt the running controller without the verified-root
     # policy bundle.
     "build-arm-driver.py NativeUfs --unverified",
-    # Stage-1 DWC3 bring-up: map usb0 (0x0a600000), read GSNPSID, device mode.
-    # Proves the block is clocked before any endpoint work is attempted.
-    "build-arm-driver.py NativeDwc3",
+    # Stage-1 DWC3 is NOT in the kernel build: the driver lives in its own repository and
+    # writes the core while its GCC clocks and GDSC are still gated, which resets the board.
+    # Keep it out until GccUsb runs first (HANDOVER-2026-10-24-ROLLBACK.md 3.3).
+    # "build-arm-driver.py NativeDwc3",
     # Bind NativeUfsBlock's IOBlockStorageDevice imports to the prelinked kext's real runtime
     # addresses (`.globl` + `.set symbol, addr`), so the block driver links without either undefined
     # symbols or a duplicate metaclass. Reads build/native-prelink/*-candidate.macho + .json.
