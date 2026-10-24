@@ -637,6 +637,48 @@ psignal()         initproc 被 SIGKILL → panic
 
 **今天至少六次把 (3) 当成 (2)，白白烧掉整轮构建。** 每次上机前都该核对一遍行号表。
 
+---
+
+## 十七、本轮收尾：已证实的、矛盾的、以及下一步
+
+### 已证实（实测，不再推断）
+
+| 事实 | 证据 |
+|---|---|
+| reason 确实是 `OS_REASON_EXEC`(9) + `SECURITY_POLICY`(8) | `SN9`/`SC8` 在交付点读出；`SIG900008` 编码吻合 |
+| reason 从 `psignal_with_reason(p, SIGKILL, signature_failure_reason)` 发出 | 探针插在 L8225 紧邻处，读的就是这个对象 |
+| `struct os_reason` 字段布局正常 | `osr_namespace`/`osr_code` 真实存在 |
+| `machine_task_process_signature` 返回 SUCCESS | `custom x18 ABI` 字符串在内核里 0 次，PROTECT 分支没编译 |
+| MACF 的 `cred_label_update_execve` hook 未运行 | `LU` 在干净行号（2500）上从未出现 |
+| `ip_cs_error` 在 kern_exec.c 内只被清空 | 全部赋值是 `= OS_REASON_NULL` |
+| `ip_cs_error` 的外部生产者只产 `CODESIGNING`(3) | `mac_vfs.c:1394`、`mach_loader.c:3387` 都是 namespace 3 |
+
+### 矛盾
+
+**七个 `signature_failure_reason` 的赋值点全部被排除，但它非 NULL 且字段正确。**
+
+代码路径与实测数据矛盾，说明还缺一块拼图：要么存在一条我没找到的赋值路径，要么 `SN9/SC8` 读到的对象
+并不是我以为的那次 exec 创建的（例如 reason 对象在多次 exec 间复用、或 `psignal` 在别的线程上收到它）。
+
+### 下一步（按优先级）
+
+1. **在 `proc_process_signature` 的调用处（L8180）画 `error` 和 `signature_failure_reason` 指针** ——
+   确认它是否被调用、返回什么、reason 指针对不对（之前的 `KR` 撞了 `PC3` 的行，数据不可信）。
+2. **在 `os_reason_create` 里画 `(namespace, code, 返回指针)`**，对照 L8227 处的指针，直接找出
+   是哪一次 create 产出了这个对象 —— 这是不依赖任何推断的最强手段。
+3. 若确认 `reason` 来自 L8019，则回头量 `ip_mac_return` 的真实赋值时刻（`exec_handle_sugid` 是否
+   真的被调用了，用探针在 L1635 旁边确认）。
+
+### 今天的工具教训（都已写入STATUS/交接）
+
+- 探针行号冲突是**今天最大的一类假信号**：LU/SIG 同行、KR/PC3 同行、EM/PC3 同行，全部把
+  「执行了但被覆盖」误读成「没执行」。
+- `strings` 默认 4 字符，`PN2`/`PC3`/`SIG` 这类短标签必须 `strings -n 2`。
+- 读屏容易把 `PN2`+值 9 读成 `PN29`。**标签和数值之间没有分隔符**，行尾数字要先按标签表切分。
+- 改 `scripts/*.py` 不 commit，`unixnu tree` 会还原 —— 所有 inserter 改动必须立刻提交。
+- trust cache 已接入 payload（56 字节，launchd cdhash `1d52c6…`），并通过 DarwinBoot
+  `ValidTrustCaches` 全部规则；这部分是**可复用资产**，无论 reason 从哪来都不白做。
+
 ## 六、状态速查
 
 **能做什么**：CI + 本地 WSL 构建（72 秒），打包 cust，刷机，真机跑到 `execve` 的 `copyoutptr`。
