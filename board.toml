@@ -66,6 +66,11 @@ archives = [
   ]
 
 [payload.adt]
+# Without a trust cache segment load_static_trust_cache() returns early, launchd has no
+# signature to validate, and exec is refused with OS_REASON_EXEC / SECURITY_POLICY, which
+# becomes "unexpected SIGKILL of initproc". The file half is kernel.macho.trustcache.
+trust_cache = true
+
 tool = "scripts/make-nabu-adt.py"
 # chip_id is deliberately absent. make-nabu-adt.py only accepts --unique-chip-id together with
 # --chip-id, and the payload that boots today carries neither, so supplying chip_id alone fails:

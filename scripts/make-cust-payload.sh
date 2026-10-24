@@ -17,6 +17,15 @@ cp "$A" "$STAGE/EFI/UniXNU/Payloads/kernel.macho.adt"
 # DKIOCGETMEMDEVINFO, and IOMedia only appears for a real device. The contents can be
 # empty for a bring-up check -- init will simply fail to find /sbin/launchd afterwards,
 # which is the expected next step.
+# The trust cache: launchd is unsigned from the kernel's point of view, and load_static_trust_cache()
+# reads /chosen/memory-map/TrustCache and returns early when the segment length is zero, which is exactly
+# how we reached "unexpected SIGKILL of initproc (OS_REASON_EXEC / SECURITY_POLICY)".
+TRUSTCACHE="$STAGE/EFI/UniXNU/Payloads/kernel.macho.trustcache"
+if [ ! -f "$TRUSTCACHE" ] && [ -f /tmp/kernel.macho.trustcache ]; then
+  cp /tmp/kernel.macho.trustcache "$TRUSTCACHE"
+fi
+echo "trustcache: $(stat -c %s "$TRUSTCACHE" 2>/dev/null || echo 0) bytes"
+
 RAMDISK="$STAGE/EFI/UniXNU/Payloads/ramdisk.img"
 if [ ! -f "$RAMDISK" ]; then
   dd if=/dev/zero of="$RAMDISK" bs=1M count=4 status=none
