@@ -540,6 +540,54 @@ psignal_with_reason(current_proc(), SIGKILL, exec_failure_reason);
 
 **所以：先量，再改。屏幕上的每一个数字都要真的读出来。**
 
+---
+
+## 十四、`bsd/kern` 里共有**六个** `SIGKILL` 投递点，探针之前插错了
+
+### 六个站点
+
+| 文件:行 | reason 变量 | 能否是 `SECURITY_POLICY` |
+|---|---|---|
+| `kern_exec.c:2158` | `exec_failure_reason` | ❌ 该变量从未被赋成 SECURITY_POLICY（全是 BAD_MACHO / COPYOUT_STRINGS / SET_DYLD_INFO 等） |
+| `kern_exec.c:4845` | `exec_failure_reason` | ❌ 同上 |
+| **`kern_exec.c:8227`** | **`signature_failure_reason`** | ✅ **只有它**（L8019 赋值） |
+| `kern_proc.c:4354` / `4573` | `kill_reason` | ❌ 属别的子系统 |
+| `kern_sig.c:1608` | `signal_reason` | 转发路径 |
+| `mach_loader.c:1400` | `load_failure_reason` | ❌ 是 `FAIRPLAY_DECRYPT`(10) / `DECRYPT`(11) |
+
+### 我之前插错了位置
+
+`PN`/`PC2` 探针插在 **L2158**（`badtoolate` 那条），而那条**从不触发** —— 所以屏幕上
+`PN`、`PC2` 都是空白，只剩 `SIG900008`。**看起来像「探针没生效」，实际是「这条路径没走」。**
+
+### 已改到正确位置
+
+```c
+kern_exec.c:8225   n a b u_mark_num("SN",  signature_failure_reason ? ->osr_namespace : 7777, 2100);
+kern_exec.c:8226   n a b u_mark_num("SC",  signature_failure_reason ? ->osr_code      : 7777, 2180);
+kern_exec.c:8227   n a b u_mark_num("SU",  (unsigned long)require_success, 2260);
+kern_exec.c:8227   psignal_with_reason(p, SIGKILL, signature_failure_reason);
+```
+
+### 判读
+
+| `SN` | `SC` | `SU` | 含义 |
+|---|---|---|---|
+| **9** | **8** | 0 或 1 | 与 `SIG900008` 一致，确认 reason 从这里发出 → `signature_failure_reason` 确实来自 L8019 → **`ip_mac_return` 非 0，存在我没找到的赋值路径** |
+| 7777 | 7777 | — | reason 是 NULL → 那 `SIG900008` 不是从这个对象来的，我的解码链条要重来 |
+| 其他 | 其他 | — | 真正的原因第一次现形 |
+
+### 一条通用教训
+
+**「探针没显示」有三种完全不同的原因，必须先区分再改：**
+
+1. **没编译进去** —— `strings -n 2` 查不到标签（`strings` 默认 4 字符，2 字符标签永远查不到）
+2. **编译进去了但那段代码没执行** —— 标签在核心里、屏幕上却没有
+3. **执行了但被覆盖** —— 行号在 console 带（< 1780）内，或被相邻探针的 61px 清除区擦掉
+
+**这一整天至少五次把 (2) 误判成 (1)，白白重构建。** 正确做法是每次都先
+`strings -n 2 kernel.macho | grep -cx LABEL` 确认标签存在，再上机看。
+
 ## 六、状态速查
 
 **能做什么**：CI + 本地 WSL 构建（72 秒），打包 cust，刷机，真机跑到 `execve` 的 `copyoutptr`。
