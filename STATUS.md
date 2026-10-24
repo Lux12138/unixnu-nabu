@@ -553,6 +553,47 @@ fastboot flash userdata out/nabu/userdata/userdata-root.img
 
 
 
+
+> ### 🎯 二分结果：`vm_page_free_count` 的异常是症状，不是病因
+>
+> 五个时点全部实测（前四个用 `nabu_mark_num` 画固定行，最后一个从 panic 里读）：
+>
+> | 时点 | `vm_page_free_count` | 位置 |
+> |---|---|---|
+> | `initialize_ram_ranges` | **0** | `pmap.c` |
+> | `pmap_startup` 返回后 | **1,207,626** ✓ | `vm_resident.c` |
+> | `vm_page_bootstrap` 结束 | **1,207,621** ✓（wire 37,563） | `vm_resident.c` |
+> | `IOFindBSDRoot` 入口 | **1,207,627** ✓ | `IOKitBSDInit.cpp` |
+> | execve 时 | **91,199,441** ✗ | `kern_exec.c` 路径 |
+>
+> **`max_mem` = 4864 MiB（正确），`max_mem/4096` = 1,245,184，与实测页数吻合。**
+>
+> 结论：从内核启动到根卷匹配、UFS 驱动全程（`host:driver-alloc` / `ufs:entered` /
+> `root:1-bringup` 都在屏幕上），内存计数**一直正确**。损坏只发生在最后一次 —— `execve` 里那次
+> `copyout` 缺页。
+>
+> **所以 9100 万页是缺页失败的副产品，不是缺页失败的原因。** 之前围绕「内存不足导致建页失败」的
+> 整条推断线作废，`dram_size` / `owned_memory_size` 完全不用动。
+>
+> ### 转向：查 pmap 的 fault 路径
+>
+> 已知：
+>
+> - `cpo0` / `cp20` 成功 —— 栈顶几页可写
+> - 往 `ap` 直接 `copyout` 一字节 → **panic，不返回错误**
+> - 缺页目标是合法用户地址，落在分配区间内
+> - 缺页发生后 `vm_page_free_count` 变成 9100 万
+>
+> 下一步要看的：`vm_fault` 在 `MACHINE_CONFIGS=BCM2837` 下的行为，特别是
+> `pmap_enter` 对 `VM_MEMORY_STACK` 的分支，以及 `copyout` 的 `user_access` 异常表项是否注册 ——
+> 后者决定缺页是「修好并重试指令」还是「直接 data abort」。
+>
+> ### 工具改进：一次启动拿全部时点
+>
+> 之前每个时点都要 `panic` + 刷机 + 拍照一轮。改成 `nabu_mark_num(label, value, row)` 画在固定行后，
+> 四个时点可以在**同一次启动**里全部读到 —— 行距 80px（每行清 61px），全部落在 console 带
+> （`g_h-780 = 1780`）以下：1780 / 1860 / 1940 / 2020。
+
 > ### 🎯 决定性数据：ADT 内存参数是对的，异常在 `vm_page_free_count`
 >
 > ```
