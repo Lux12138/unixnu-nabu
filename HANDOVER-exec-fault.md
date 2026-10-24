@@ -362,6 +362,59 @@ native-ufs-root              1
 | 仍出现且带 `(CS_KILLED)` | AMFI 标志没被识别，需要换注入路径（ADT 的 `chosen` 节点属性） |
 | 仍出现但不带 `(CS_KILLED)` | 不是签名问题，是别的 exit reason —— 看 `namespace` / `code` 两个数字 |
 
+---
+
+## 十一、AMFI 确认生效，且**不是**代码签名问题
+
+### 实测
+
+```
+AMx = 10
+```
+
+解包：`AMx = AMFI值 × 10 + CS_KILLED`
+
+| 项 | 值 | 含义 |
+|---|---|---|
+| `AMFI 值` | **1** | `amfi_get_out_of_my_way` **确实被内核解析到了** |
+| `CS_KILLED` | **0** | **`launchd` 不是因代码签名被杀的** |
+
+**所以两条推断都被否定：**
+
+- ❌ 「ADT 的 boot-args 没到内核」 —— 到了，`AMFI = 1`
+- ❌ 「`launchd` 未签名被 `CS_KILLED`」 —— 不是，`CS_KILLED = 0`
+
+### 这意味着什么
+
+`psignal()` 里那个 `if (signum == SIGKILL && p == initproc)` 分支**确实被走到了**（所以有那句
+`unexpected SIGKILL` 的 panic），但杀它的原因不是签名，而是别的 exit reason。
+
+### 唯一还缺的信息
+
+`signal_reason->osr_namespace` 和 `osr_code` —— 它们本来画在 2580 行，**超出 2560 的屏幕高度**，
+所以一直看不到。
+
+已改到 2500 行（`AMx` 的结论已拿到，让位），编码为：
+
+```
+SIG = namespace × 100000 + (osr_code % 100000)
+SIG = 7777777  →  signal_reason == NULL
+```
+
+### 判读表
+
+| `SIG` | `osr_namespace` | 含义 |
+|---|---|---|
+| `400000 + code` | 4 | **Jetsam** —— 内存压力，与 boot-arg 无关 |
+| `300000 + code` | 3 | **EXEC** —— 执行阶段失败（`EXEC_EXIT_REASON_*`） |
+| `600000 + code` | 6 | **CODESIGNING** —— 与 `CS_KILLED=0` 矛盾，需重新查 |
+| `7777777` | — | `signal_reason` 为 NULL，走的是「no reason provided」那条 panic |
+| 其他 | — | 按 `osr_namespace` 值查 `osfmk/kern/exit_reason.h` |
+
+**若为 EXEC（3）**：`osr_code` 会指出具体是哪一步 —— 例如 `EXEC_EXIT_REASON_COPYOUT_STRINGS`
+对应我们早先看到的 `cpo0`，`EXEC_EXIT_REASON_COPYOUT_DYNLINKER` 对应 `cp2`。这也正好能验证
+PAC 修复之后那次 recovery 究竟把 `copyoutptr` 变成了什么返回码。
+
 ## 六、状态速查
 
 **能做什么**：CI + 本地 WSL 构建（72 秒），打包 cust，刷机，真机跑到 `execve` 的 `copyoutptr`。
