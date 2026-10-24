@@ -3,13 +3,40 @@
 > 任何新会话/新窗口接手，**先读这个文件**，再读下面指定的文档，然后才动手。
 > 不按顺序读就动手，会重复今天踩过的十个坑。
 
-## 一、先读这三份（按顺序）
+## 一、必读清单（这是硬性要求，不许跳）
+
+**先读 `DOCS-INDEX.md`**，它列出了云端仓库里**全部 18 份文档**各自讲什么、该什么时候读。
+
+然后**逐份研读**（不是扫一眼）：
 
 | 顺序 | 文件 | 内容 |
 |---|---|---|
 | 1 | **本文件** | 铁律 + 当前基线 + 两个仓库的 HEAD |
 | 2 | `HANDOVER-2026-10-24-ROLLBACK.md` | 最新交接：今天所有实测结论 + 十个坑 + 下一步排序 |
 | 3 | `HANDOVER-exec-fault.md` | 主线 689 行完整记录（execve/SIGKILL 全链条） |
+| 4 | `HANDOVER.md` | 权威初始交接（两个 kprintf 开关、PE_kputc、RAMDisk、FVMAIN 上限） |
+| 5 | `HANDOVER-legacy.md` | 40K 早期历史，追溯"当初为什么这么做" |
+| 6 | `STATUS.md` | 40K 逐轮流水，查某轮到底发生了什么 |
+| 7 | `README.md` | 硬件与构建环境事实 |
+
+**还要读全部提交记录的 message**（两边仓库都要）：
+
+```bash
+cd ~/src/unixnu-nabu && git log --oneline -60
+cd ~/src/UniXNU      && git log --oneline -60
+```
+
+**每条都要看。** 它们不是套话，而是当轮的实测结论。例如
+`5488c9e`（PAC 修复机制）、`bcedff4`（vm_page_free_count 是后果不是原因）、
+`6373972`（探针弯路的十个流程错误）、`ded3190`（ADT 缺节点导致功能静默失效——
+后来 TrustCache 是同一个模式）、`5b095ac`（DWC3 为什么崩，已回滚，读它避免重蹈）。
+
+**读完后必须能回答这五个问题**（答不出就继续读）：
+1. 现在的 panic 是什么？reason 的 namespace/code 是多少，实测值从哪来？
+2. execve 缺页是怎么修好的？改动在哪一行？
+3. 为什么 AMFI boot-args 要改在 `make-nabu-adt.py` 而不是 `unixnu.toml`？
+4. 探针"没显示"有哪三种可能？今天各踩过几次？
+5. 自动读日志的四条路里，哪条可行、哪三条实测不通？
 
 `PUSH-GOTCHA.md` 是 git push 假成功那个坑，推送前扫一眼。
 
