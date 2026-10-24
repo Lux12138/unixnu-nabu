@@ -472,6 +472,74 @@ psignal()            SIGKILL on initproc → panic
 **从「`launchd` 被 SIGKILL」到「exec 的安全策略拒绝，且不是签名、不是 jetsam」—— 范围已经收窄到
 一个函数返回值。** 前四个 namespace 候选全部排除，剩下这一条。
 
+---
+
+## 十三、推断与代码矛盾 → 改为在 SIGKILL 交付点实测
+
+### 矛盾
+
+**实测事实：**
+
+```
+SIG = 900008  →  namespace 9 (OS_REASON_EXEC) + code 8 (EXEC_EXIT_REASON_SECURITY_POLICY)
+```
+
+**全树只有两处产生这个 reason：**
+
+| 位置 | 触发条件 | 是否排除 |
+|---|---|---|
+| `kern_exec.c:7950` | `machine_task_process_signature` 返回非 `KERN_SUCCESS` | ✅ 内核里 `custom x18 ABI usage` 字符串 **0 次**，说明跑的是 `#if !__ARM_KERNEL_PROTECT__` 分支，返回 SUCCESS |
+| `kern_exec.c:8019` | `imgp->ip_mac_return != 0` | ⚠️ 需要 `exec_handle_sugid` 走到 L6773 |
+
+**而 `ip_mac_return` 的来源链：**
+
+```
+kern_exec.c:6640   int label_update_return = 0;      ← 已初始化
+kern_exec.c:6757   kauth_proc_label_update_execve(..., &label_update_return)
+kern_exec.c:6773   imgp->ip_mac_return = label_update_return;
+mac_vfs.c:876      *labelupdateerror = error;
+```
+
+**`LU` 探针（在 `*labelupdateerror = error` 处）从未画出** → `mac_cred_label_update_execve` 没被调用
+→ `label_update_return` 保持 0 → `ip_mac_return` 应为 0 → L8019 不该触发。
+
+**代码说不该发生，实测说发生了。**
+
+### 对策：在交付点量，不再向后反推
+
+新增 `PN` / `PC2` 探针，直接画 `psignal_with_reason` 收到的那份 reason：
+
+```c
+nb u_mark_num("PN",  exec_failure_reason ? ->osr_namespace : 7777, 2100);
+nb u_mark_num("PC2", exec_failure_reason ? ->osr_code      : 7777, 2180);
+psignal_with_reason(current_proc(), SIGKILL, exec_failure_reason);
+```
+
+| `PN` | `PC2` | 含义 |
+|---|---|---|
+| 7777 | 7777 | reason 是 NULL → 走的是 `kern_sig.c` 的「no reason provided」那条，与 `SIG900008` 矛盾，说明我解码错了 |
+| **9** | **8** | 确认 `SECURITY_POLICY`，且它确实从这里发出 —— 那 `ip_mac_return` 一定非 0，需要再找第三个赋值点 |
+| 其他 | 其他 | 真正的原因第一次现形 |
+
+### 这一天的教训（写下来免得重复）
+
+**从早上到现在，凡是「按代码推断」得出的结论，有一半被实测推翻：**
+
+| 推断 | 实测结果 |
+|---|---|
+| ADT 的 dram_size 需要改 | `maxmem4864` 正确 |
+| `size - rlimit` 下溢 | `prt16384` 正常 |
+| 栈太小 | `usz` 4.24 MB 充足 |
+| `freepg` 虚高导致缺页失败 | `freepg` 是 panic 的**后果** |
+| slide 让 offset 算错 | 两端同 slide，抵消 |
+| boot-args 没到内核 | `AMFI = 1`，到了 |
+| 签名失败（CS_KILLED） | `CS_KILLED = 0` |
+
+**唯一被实测证实的推断是 PAC 那条** —— 而它也是唯一被改成实际修复的一条（`PCOF` 从
+`0x230397` 变成 `0x2b7027`，`RV` 从 0 变成有效指针，`_bcopyout` 的 panic 消失）。
+
+**所以：先量，再改。屏幕上的每一个数字都要真的读出来。**
+
 ## 六、状态速查
 
 **能做什么**：CI + 本地 WSL 构建（72 秒），打包 cust，刷机，真机跑到 `execve` 的 `copyoutptr`。
