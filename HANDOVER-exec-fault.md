@@ -111,6 +111,54 @@ _bcopyout                     0xfffffff00740eb44
 
 ---
 
+---
+
+## 七、最可能的下一个原因：内核 slide 让 offset 算错
+
+`find_copyio_recovery_entry` 的算法是：
+
+```c
+static inline ptrdiff_t
+copyio_recovery_offset(uintptr_t addr)
+{
+    return (ptrdiff_t)(addr - (uintptr_t)copyio_recover_table);
+}
+```
+
+**它用「运行时 PC」减去「`copyio_recover_table` 符号值」。**
+
+如果两者处在**同一个 slide 空间**，差值不变，一切都对。但如果符号值取的是**链接地址**（未 slide），
+而 PC 是**运行时地址**（已 slide），差值就会带上 slide 量，落不进任何 `[cre_start, cre_end)`。
+
+本机 `board.toml` 的 `[kernel.prelink]` 里有：
+
+```toml
+slide = "-0x1000000"      # 16 MiB 负 slide
+```
+
+**这与「表完整、理论范围包含 PC、`recover` 却是 0」完全吻合。** 表项里的 offset（`0x2b7022..0x2b7056`）
+是链接期算出来的，本身不含 slide；而 PC 是运行时值。
+
+### 验证方法（探针已布好）
+
+`PCOF`（1980 行）画的就是 `copyio_recovery_offset(PC)`：
+
+| `PCOF` 值 | 判定 |
+|---|---|
+| 落在 `0x2b7022..0x2b7056` | offset 正常 → 查表逻辑另有问题 |
+| **是 `0x2b7032 ± 0x1000000` 量级的巨大值** | **slide 混入，确认** |
+| 完全对不上的其他值 | 表基址取错 |
+
+### 如果确认，修法
+
+两条路，都不改汇编：
+
+1. **让 offset 计算用 slide 后的基址** —— 即比较时对 `copyio_recover_table` 取
+   `VM_KERNEL_UNSLIDE` 或反之，保证两端同一空间；
+2. **改 `cre_start` / `cre_end` 的生成方式** —— 在宏里对 `Lcre_start_\@` 和 `end_addr` 先做同一变换。
+
+第 1 条改动面最小，只动 `copyio_recovery_offset` 一处。
+
 ## 六、状态速查
 
 **能做什么**：CI + 本地 WSL 构建（72 秒），打包 cust，刷机，真机跑到 `execve` 的 `copyoutptr`。
