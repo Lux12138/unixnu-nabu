@@ -20,6 +20,9 @@ CONFIG_XNU_ARMCPU=y
 # their place registers a duplicate class and the kernel panics, so the switch stays off until
 # the bundle exists.
 CONFIG_XNU_NATIVE_UFS=y
+# Stage-1 USB: map usb0 (0x0a600000) and read GSNPSID to prove the block
+# is clocked. No endpoints or gadget yet.
+CONFIG_XNU_NATIVE_DWC3=y
 CONFIG_XNU_NATIVE_AES=y
 CONFIG_XNU_TRUST_CACHE_RUNTIME=y
 CONFIG_XNU_SOURCE_MOCKFS=y
