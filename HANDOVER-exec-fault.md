@@ -415,6 +415,63 @@ SIG = 7777777  →  signal_reason == NULL
 对应我们早先看到的 `cpo0`，`EXEC_EXIT_REASON_COPYOUT_DYNLINKER` 对应 `cp2`。这也正好能验证
 PAC 修复之后那次 recovery 究竟把 `copyoutptr` 变成了什么返回码。
 
+---
+
+## 十二、🎯 `SIG900008` 完全解码：`OS_REASON_EXEC` + `SECURITY_POLICY`
+
+### 解码
+
+```
+SIG = 900008
+    = namespace × 100000 + (code % 100000)
+      namespace = 9   = OS_REASON_EXEC           （bsd/sys/reason.h:96）
+      code      = 8   = EXEC_EXIT_REASON_SECURITY_POLICY  （同文件:255）
+```
+
+**`launchd` 不是被 jetsam、不是被签名、也不是被别的子系统杀的 —— 是 exec 的安全策略拒绝。**
+
+### 完整因果链（全部实测）
+
+```
+kern_exec.c:8018   if (imgp->ip_mac_return != 0)
+                     → os_reason_create(OS_REASON_EXEC, EXEC_EXIT_REASON_SECURITY_POLICY)
+kern_exec.c:6773     imgp->ip_mac_return = label_update_return
+kern_credential.c    kauth_proc_label_update_execve(... &label_update_return)
+mac_vfs.c:876        *labelupdateerror = error
+mac_vfs.c:~840       error = mac_error_select(hook(...), error)   遍历所有 policy
+psignal()            SIGKILL on initproc → panic
+```
+
+**而 `machine_task_process_signature`（另一条会产生同一 reason 的路径）可以排除：**
+它的错误字符串 `custom x18 ABI usage` 在内核二进制里出现 **0 次**，说明
+`#if !__ARM_KERNEL_PROTECT__` 分支生效，函数返回 `KERN_SUCCESS`。
+
+### 树里注册的两个 policy 都**没有**那个钩子
+
+| policy | 文件 | `mpo_cred_label_update_execve` |
+|---|---|---|
+| `CHECK`（Check Assumptions） | `bsd/kern/policy_check.c:527` | ❌ |
+| `Guarded vnode policy` | `bsd/kern/kern_guarded.c:1582` | ❌ |
+
+`libkern/amfi/amfi.c` 只有 293 字节，内容仅 `amfi_interface_register()` —— 是**接口注册**，
+真正的实现在外部 kext。
+
+**所以 MAC 循环理论上应让 `error` 保持 0。这与「SECURITY_POLICY 被创建」矛盾。**
+
+### 正在量的东西
+
+新增 `LU` 探针（2500 行）画 `*labelupdateerror`：
+
+| `LU` | 含义 | 下一步 |
+|---|---|---|
+| **0** | MAC 未拒绝 —— `SECURITY_POLICY` 来自别处 | 回到 `kern_exec.c:8018` 之前的其它 `goto done` 路径 |
+| **非 0** | 某个 policy hook 返回了该值 | 用 errno 反查是哪个 hook（EPERM/EACCES/EAUTH…） |
+
+### 为什么这一轮值得
+
+**从「`launchd` 被 SIGKILL」到「exec 的安全策略拒绝，且不是签名、不是 jetsam」—— 范围已经收窄到
+一个函数返回值。** 前四个 namespace 候选全部排除，剩下这一条。
+
 ## 六、状态速查
 
 **能做什么**：CI + 本地 WSL 构建（72 秒），打包 cust，刷机，真机跑到 `execve` 的 `copyoutptr`。
