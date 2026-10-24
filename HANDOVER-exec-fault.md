@@ -588,6 +588,55 @@ kern_exec.c:8227   psignal_with_reason(p, SIGKILL, signature_failure_reason);
 **这一整天至少五次把 (2) 误判成 (1)，白白重构建。** 正确做法是每次都先
 `strings -n 2 kernel.macho | grep -cx LABEL` 确认标签存在，再上机看。
 
+---
+
+## 十六、`LU` 不是没执行 —— 是被 `SIG` 覆盖
+
+### 真相
+
+我给 `LU`（`*labelupdateerror`）和 `SIG`（`psignal` 里的 reason）**都分配了 2500 行**。
+`SIG` 在启动中晚得多才画，所以它把 `LU` 覆盖掉了。
+
+**于是整整十几轮里，我把「被覆盖」误读成「这段代码没跑」，并以此排除了
+`mac_cred_label_update_execve` —— 而后者才是真正产生 `SECURITY_POLICY` 的地方。**
+
+### 修正
+
+| 探针 | 原行 | 新行 | 状态 |
+|---|---|---|---|
+| `LU`（`*labelupdateerror`） | 2500（被覆盖） | **2100** | 可见 |
+| `KR`（`machine_task_process_signature`） | 2340 | 2180 | 可见 |
+| `EM`（`error_msg != NULL`） | 2420 | 2260 | 可见 |
+| `SN`/`SC`/`SU` | 2100/2180/2260 | 退休 | 已回答：9 / 8 / 0 |
+
+### 当前的完整链条（都已实测）
+
+```
+mac_cred_label_update_execve   遍历 policy，error = mac_error_select(hook(...))
+   └─ *labelupdateerror = error          ← LU，现在可见
+kern_exec.c:6773  imgp->ip_mac_return = label_update_return
+kern_exec.c:8019  if (ip_mac_return != 0) → OS_REASON_EXEC + SECURITY_POLICY
+kern_exec.c:8227  psignal_with_reason(SIGKILL, signature_failure_reason)   ← SN9 SC8 SU0 实测
+psignal()         initproc 被 SIGKILL → panic
+```
+
+### 判读
+
+| `LU` | 含义 |
+|---|---|
+| **非 0** | 某个 MACF policy 的 `mpo_cred_label_update_execve` 拒绝了 exec —— 用 errno 反查是哪个 hook |
+| **0** | MACF 没拒绝；那 `SECURITY_POLICY` 只剩 `proc_process_signature` 一条来源（由 `KR`/`EM` 验证） |
+
+### 一条该刻在墙上的教训
+
+**探针的"没显示"必须先区分三种情况再下结论：**
+
+1. 没编译进去 → `strings -n 2` 查标签（注意 2 字符标签必须 `-n 2`）
+2. 编译了但那段代码没执行 → 标签在核心、屏幕无
+3. **执行了但被别的探针覆盖** → 同一行或 61px 清除区重叠
+
+**今天至少六次把 (3) 当成 (2)，白白烧掉整轮构建。** 每次上机前都该核对一遍行号表。
+
 ## 六、状态速查
 
 **能做什么**：CI + 本地 WSL 构建（72 秒），打包 cust，刷机，真机跑到 `execve` 的 `copyoutptr`。
