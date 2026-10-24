@@ -54,9 +54,10 @@ archives = [
     # policy bundle.
     "build-arm-driver.py NativeUfs --unverified",
     # Stage-1 DWC3 is NOT in the kernel build: the driver lives in its own repository and
-    # writes the core while its GCC clocks and GDSC are still gated, which resets the board.
-    # Keep it out until GccUsb runs first (HANDOVER-2026-10-24-ROLLBACK.md 3.3).
-    # "build-arm-driver.py NativeDwc3",
+    # Stage 0 powers usb30_prim GDSC and the branch clocks first; every stage is behind
+    # nabu-usb=1 and the core reset behind nabu-usb-init=1, so the driver can sit in the
+    # kernel with the hardware untouched until the boot-arg opens it.
+    "build-arm-driver.py NativeDwc3",
     # Bind NativeUfsBlock's IOBlockStorageDevice imports to the prelinked kext's real runtime
     # addresses (`.globl` + `.set symbol, addr`), so the block driver links without either undefined
     # symbols or a duplicate metaclass. Reads build/native-prelink/*-candidate.macho + .json.
