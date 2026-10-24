@@ -232,6 +232,136 @@ copyio_recovery_offset(addr) = addr - (uintptr_t)copyio_recover_table
 `RV`（1900 行）变成非 0 即修复生效 —— 缺页会被 `handle_kernel_abort_recover` 接住并跳到
 `copyio_error`，`copyoutptr` 返回 `EFAULT` 而不是让内核崩掉。
 
+---
+
+## 九、STRIP_PTR 修复已生效 —— 故障点后移
+
+### 修复前后的 `PCOF` 对比
+
+| 启动 | `PCOF` | `RV` | 判定 |
+|---|---|---|---|
+| 修复前 | `0x230397` | **0** | 对 PAC 签名值算 offset，落不进任何表项 |
+| **修复后** | **`0x2b7027`** | **`0xfffffff006f6f779`** | **offset 正确，查表成功** |
+
+**验算：**
+
+```
+RV - TB      = 192 = 8 × 24          → 第 9 条表项（0-based #8）
+表项 9 范围   = 0x2b7022 .. 0x2b7056
+实测 PCOF    = 0x2b7027              → 落在范围内 ✓
+```
+
+**所以 `find_copyio_recovery_entry` 现在能返回有效指针了。这是本轮唯一的实质性修复，成功了。**
+
+### 但 panic 依旧 —— 故障点移到了 `handle_kernel_abort_recover`
+
+`handle_kernel_abort_recover` 的 asm 逻辑（`sleh.c:1716`）：
+
+```asm
+ldr  x1, [recover, CRE_RECOVERY]   // x1 = cre_recovery，相对偏移
+add  x1, x1, x6                    // x1 += copyio_recover_table → 绝对地址
+str  x1, [x0, SS64_PC]             // 写回 saved PC，跳过去
+```
+
+**计算本身是对的（`TB + 0x2b6eb6` 即 `copyio_error`）。** 新增探针查实际值：
+
+| 行 | 标签 | 含义 |
+|---|---|---|
+| 2140 | `JT` | `recover->cre_recovery` —— 即将跳转到的地址 |
+| 2220 | `RJ` | `recover` 指针，用于与 `RV` 对照 |
+
+### 下一步的三种判读
+
+| `JT` 值 | 结论 | 动作 |
+|---|---|---|
+| `TB + 0x2b6eb6`（正常） | 跳转目标正确，panic 发生在 `copyio_error` 返回之后 | 查 `copyoutptr` 的返回值路径与 exec 的 `badtoolate` |
+| 异常小值或 0 | 表项内容被读错 | 查 `CRE_RECOVERY` 的 `offsetof` 与结构布局 |
+| 与 `TB` 无关的值 | `recover` 指针虽然非 0 但不在表内 | 重新检查 `find_copyio_recovery_entry` 的边界比较 |
+
+### 本轮总结
+
+**从「每次 copyio 缺页必崩」到「查表能成功」，机制上跨了一步。** 剩下的是恢复之后的路径问题，
+不再是「表查不到」这一类。
+
+---
+
+## 十、🎯 execve 的缺页已经跨过去了 —— 现在是 launchd 被 SIGKILL
+
+### 证据链
+
+```
+R2 (panic 点的 recover)  没画  →  handle_kernel_abort 没走到那里
+JT (recovery 跳转目标)   没画  →  但 RV 非 0，recover 确实找到了
+                              →  handle_kernel_abort_recover 执行，跳回 copyio_error
+                              →  copyoutptr 返回 EFAULT，execve 继续
+                              →  launchd 起来了
+                              →  然后被 SIGKILL
+```
+
+**盘踞一整天的 `_bcopyout` 缺页 panic 已经消失。** PAC 修复（`VM_KERNEL_STRIP_PTR`）是有效的那一刀。
+
+### 新的 panic 及其出处
+
+久违的那句屏幕文本，我一开始读成了 `unexpected STATUS!! nf %x %x with mask`，
+实际是内核二进制里的：
+
+```
+unexpected SIGKILL of %s %s with reason -- namespace %d code 0x%llx description %.800s
+```
+
+出处 `bsd/kern/kern_sig.c:2077`，在 `psignal()` 里：
+
+```c
+/* catch unexpected initproc kills early for easier debuggging */
+if (signum == SIGKILL && p == initproc) {
+    panic_plain("unexpected SIGKILL of %s %s with reason -- ...",
+        (p->p_name[0] ? p->p_name : "initproc"),
+        ((proc_getcsflags(p) & CS_KILLED) ? "(CS_KILLED)" : ""),   // ← 这一列决定性质
+        signal_reason->osr_namespace, signal_reason->osr_code, ...);
+}
+```
+
+**PID 1 不允许被 kill，所以内核 panic 报出来。**
+
+### 🎯 根因：两套 boot-args，生效的那套没有 AMFI
+
+| 来源 | 内容 | AMFI |
+|---|---|---|
+| `make-nabu-adt.py:135`（**实际生效**） | `-enable_kprintf_spam native-ufs-root=1 native-ufs-diagnostics=1 maxmem=4864` | ❌ |
+| `unixnu.toml` 的 `args`（**不生效**） | `... amfi_get_out_of_my_way=1 ...` | ✅ |
+
+**DarwinBoot 读 ADT**（启动日志 `DB3 adt read Success`），`unixnu.toml` 的 `args` 根本到不了内核。
+
+**`launchd` 未签名 → `CS_KILLED` → SIGKILL → panic。** 与观察完全一致。
+
+### 修复
+
+`make-nabu-adt.py` 的 boot-args 加上三个官方标志：
+
+```
+amfi_get_out_of_my_way=1
+cs_enforcement_disable=1
+amfi_allow_any_signature=1
+```
+
+已验证进入 ADT：
+
+```
+amfi_get_out_of_my_way       1
+cs_enforcement_disable       1
+amfi_allow_any_signature     1
+maxmem                       1
+native-ufs-root              1
+```
+
+### 下一步判读
+
+| 现象 | 含义 |
+|---|---|
+| 不再出现 `unexpected SIGKILL` | AMFI 生效，launchd 活着 → **进入 Stage 6 后半段**（launchd 之后是 userspace 服务） |
+| 仍出现且带 `(CS_KILLED)` | AMFI 标志没被识别，需要换注入路径（ADT 的 `chosen` 节点属性） |
+| 仍出现但不带 `(CS_KILLED)` | 不是签名问题，是别的 exit reason —— 看 `namespace` / `code` 两个数字 |
+
 ## 六、状态速查
 
 **能做什么**：CI + 本地 WSL 构建（72 秒），打包 cust，刷机，真机跑到 `execve` 的 `copyoutptr`。
