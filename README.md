@@ -7,9 +7,20 @@
 > （`fastboot partition-size:userdata = 0x74167BB000`）。
 > 所以 `dram_size = 0x300000000` 是**为这台机器测出来的**，不是标准 6/8 GB 机型的数字。
 
-> **状态**：**内核已经执行到 `execve("/sbin/launchd")`**
-> （`Process 1 exec of /sbin/launchd failed, errno 2`）。
-> 内核侧全部通过，现在缺的是一个装了系统文件的根文件系统。
+> **状态（2026-10-28，以此为准）**：**用户态已经跑起来了。**
+>
+> - 根卷 + launchd 已通过：完整启动日志 **146 KB / 2,032 行**（与自动复位同一轮取得）；
+> - runningboardd / backboardd / SpringBoard 都在运行，各自在自己的 mqueue 上等消息
+>   （`[hb] tag=chk n=68 sb=1 bb=1 rb=1 cfg=1`），keybagd 走
+>   `DEVICE HAS EPHEMERAL DATA VOLUME, SKIP INIT`；
+> - 显示：`[nm] mask=7 size=1336 init=1`（三个抽象基类**名字**不可实例化，
+>   `IOMobileFramebufferUserClient` 可分配且 init 成功）；运行期唯一显示相关失败是
+>   `[ex] pid=26 comm=IOMFB_FDR_Loader rv=0x100 sig=0 code=1`。**缺的是一个 provider 实例**；
+> - 每轮已无人值守：86~129 s 跑完一轮、零按键（CDC 控制通道 + WDT 定时停车的细节见
+>   公开仓库 [`nabu-usb-cdc`](https://github.com/Lux12138/nabu-usb-cdc) 的 `docs/07`）。
+>
+> **历史状态（2026-10-25，已被上面取代）**：内核执行到 `execve("/sbin/launchd")`，
+> `Process 1 exec of /sbin/launchd failed, errno 2`；当时缺的是装了系统文件的根文件系统。
 
 ---
 
@@ -208,27 +219,24 @@ darwinboot-memory-size  = 0x20000000    512 MiB 连续窗口
 
 ---
 
-## 六、下一步
+## 六、下一步（2026-10-28 更新）
 
-**唯一缺的是把解出来的根做成一个能挂的卷。**
+**唯一硬阻塞：给 `IOMobileFramebuffer` 提供一个 provider 实例。**
 
-```bash
-./unixnu ipsw fetch OS Cryptex1,SystemOS      # 已下好：OS 4.80 GiB + SystemOS 3.08 GiB
-7z x -y -o/tmp/dmgout out/ipsw/21H461/044-76040-038.dmg
-./unixnu build userdata                       # SHNGROOT manifest + 两个窗口
-fastboot flash userdata out/nabu/userdata/userdata-root.img
-```
+其余已全部在板上跑通（见文首状态）。当前三条待办，按判别力排序：
 
-`[userdata]` 几何（TWRP 实测）：
+1. **把 `mask=7` 的歧义定死**：`allocClassWithName` 对“未注册”和“抽象类”都返回 NULL
+   （抽象类生成的 `alloc()` 恒返回 NULL），单靠 mask 分不开；改用
+   `getMetaClassWithName()` 对三个名字逐个判非空。
+2. **provider 实例从哪来**：自写 `IOMobileFramebuffer` 子类已在链接期被否证
+   （缺 `gMetaClass` / ctor / dtor——基类在 prelink 的 kext 里，不参与内核链接）。
+   社区路线是原版 `AppleCLCD` + 自造 `/arm-io/disp0` 节点。
+3. **把“咬合 = 武装后约 32 s”从推断变成实测**：把 `--capture` 放长到覆盖复位点，
+   用真实的 `USB LOST at` 时间戳定。
 
-```
-first_lba = 0x288C40     2,654,272    (4 KiB LBA)
-last_lba  = 0x77BF3FA    125,436,922
-lba_bytes = 4096
-windows   = [OS, SystemOS]
-```
-
-**不再是编译问题，不再是驱动问题，是数据问题。**
+> **历史（2026-10-25 的下一步，已取代）**：把解出来的根做成一个能挂的卷
+> （`./unixnu build userdata` + `fastboot flash userdata`）。现在根卷走 APFS +
+> **nabuvar**（内存卷挂 `/private/var`），不再需要刷 userdata。
 
 ---
 

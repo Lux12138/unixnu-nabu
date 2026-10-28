@@ -6,6 +6,22 @@
 > 不是标准 6/8 GB 机型上的数字。照抄其他项目的 `0x180000000`（6 GiB）会让 6 GiB 以上的
 > 物理内存对 Darwin 不可见。
 
+## 现状（2026-10-28，以此为准）
+
+**用户态已经跑起来，不再停在 `errno 2`。**
+
+| 项 | 实测 |
+|---|---|
+| 根卷 + launchd | 通过；完整启动日志 **146,042 B / 2,032 行**（与自动复位同一轮取得） |
+| 守护进程 | `[hb] tag=chk n=68 sb=1 bb=1 rb=1 cfg=1`；runningboardd / backboardd / SpringBoard 都在各自 mqueue 上等消息 |
+| keybagd | `DEVICE HAS EPHEMERAL DATA VOLUME, SKIP INIT` + `[ex] pid=11 comm=keybagd rv=0x0` |
+| 显示 | `[nm] mask=7 size=1336 init=1 rel=0`；运行期唯一显示相关失败 `[ex] pid=26 comm=IOMFB_FDR_Loader rv=0x100 sig=0 code=1` |
+| 当前阻塞 | 缺一个 `IOMobileFramebuffer` 的 provider 实例 |
+| 每轮成本 | 86~129 s，零按键（CDC 控制通道 + WDT 定时停车，见 `nabu-usb-cdc` 的 `docs/07`） |
+
+下面从「里程碑：内核走到了 launchd」开始的内容是 **2026-10-23 ~ 10-25 的历史流水**，
+保留用于追溯；结论（“缺一个装了系统文件的根文件系统”）**已被取代**。
+
 ## 里程碑：内核走到了 launchd
 
 **屏幕证据（2026-10-23 晚）**
