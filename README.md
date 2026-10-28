@@ -2,6 +2,9 @@
 
 在 **小米平板 5（nabu，骁龙 860 / SM8150）** 上通过 UEFI 启动 **苹果 XNU 内核** 的完整移植记录。
 
+> **本仓库记录的是「推倒重来」之前的那条线。** 当前实际状态、以及旧文档里已经失效的说法，
+> 见 [`CURRENT-STATE.md`](CURRENT-STATE.md)；与旧文档冲突时**以它为准**。
+
 > **本机是扩容版**：物理 DRAM **12 GiB**（TWRP 实测 `MemTotal = 11766512 kB`，
 > 即 12 GiB 减去约 816 MB 给 modem/hyp/rmtfs），userdata **约 468 GiB**
 > （`fastboot partition-size:userdata = 0x74167BB000`）。
