@@ -21,9 +21,11 @@ python E:/nabu/tools/pipeline.py --full --capture 60 \
 | 守护进程 | `[hb] tag=chk n=68 sb=1 bb=1 rb=1 cfg=1` | 同上 |
 | keybagd | `DEVICE HAS EPHEMERAL DATA VOLUME, SKIP INIT` + `[ex] pid=11 comm=keybagd rv=0x0` | 同上 |
 | 显示族 | `[nm] mask=7 size=1336 init=1 rel=0`（第 87 行） | 同上 |
+| 显示注册表 | `[nm] reg=0x7 (imo,imos,imol,dpd)` | d2~d5 轮 |
+| 晚加载 | `[nm] late reg=7 load=0 reg2=f` | d4 / d5 轮 |
 | 显示失败点 | `[ex] pid=26 comm=IOMFB_FDR_Loader rv=0x100 sig=0 code=1` | wdt-final 轮同型 |
 
-### `mask=7` 怎么读
+### `mask=7` 怎么读（已定案）
 
 `mask` 是 `OSMetaClass::allocClassWithName()` 对三个名字的失败位图：
 `IOMobileFramebuffer` / `IOMobileFramebufferService` / `IOMobileFramebufferLegacy`。
@@ -32,7 +34,12 @@ python E:/nabu/tools/pipeline.py --full --capture 60 \
 所以 `mask=7` **不能**读成“这三个类不存在”。同一行的 `size=1336 init=1` 来自
 `IOMobileFramebufferUserClient`（具体类，可分配且 init 成功）。
 
-要把“注册了没有”定死，只能改用 `getMetaClassWithName()` 对三个名字逐个判非空。
+用 `getMetaClassWithName()` 复核过（`[nm] reg=0x7`）：**三个基类都已注册**，
+`mask=7` 只是“它们是抽象类”的表现。第四位 `dpd`（`AppleDPDisplay`）在早期为 0，
+执行 `OSKextLoadKextWithIdentifier("com.apple.driver.AppleDPDisplay")` 后变成
+`reg2=f`（`load=0` 表示加载成功）——即 **`AppleDPDisplay` 可以加载并注册进来**。
+
+**缺的仍然是一个已 attach 的 provider 实例**（有类 ≠ 有挂到设备树上的对象）。
 
 ## 2. 启动链与复位
 
@@ -75,12 +82,14 @@ XBL → ABL → fastboot boot Mu UEFI → cust 里的 UniXNU payload → XNU
 | 下一步 `./unixnu build userdata` + `fastboot flash userdata` | 已取代：只读 APFS 根 + nabuvar 挂 `/private/var` |
 | 日志靠 UFS 窗口（`NABULOG1`，userdata 末尾 32 MiB）定期写盘再读回 | 主线改为 DWC3 CDC 实时串口；UFS 窗口只保留为 panic 场景旁路 |
 | 复位靠 panic 路径里的 PSCI `SYSTEM_RESET` | 现在主复位源是 APSS 硬件狗（park-after 定时武装）；PSCI 仍用于 `REBOOT` 控制帧 |
+| 显示走“自研 `IOCoreSurfaceRoot` + `AppleCLCD`，注册进 `iokit/KernelConfigTables.cpp`”（`HANDOVER.md` / `FLOW.md` / `PREDICTIONS.md` / `PLAN.md`） | **`AppleCLCD` 不在 iPadOS 的 kernelcache 里**；显示侧真身是 `com.apple.driver.AppleDPDisplay`（匹配 `lcd,edp`），已在板上实测可加载并注册（`late load=0 reg2=f`）。自写 `IOMobileFramebuffer` 子类那条静态链接路已被否证 |
 
 ## 6. 下一步（按判别力排序）
 
-1. **`getMetaClassWithName()`**：把 `mask=7` 的歧义定死（一轮、零风险）。
-2. **provider 实例**：自写 `IOMobileFramebuffer` 子类已在链接期被否证
-   （缺 `gMetaClass` / ctor / dtor，基类在 prelink 的 kext 里、不参与内核链接）。
-   社区路线是原版 `AppleCLCD` + 自造 `/arm-io/disp0` 节点。
+1. ~~`getMetaClassWithName()` 定死 `mask=7`~~ —— **已做**：`reg=0x7`，三个基类均已注册，
+   `mask=7` 只说明它们抽象。
+2. **给 `AppleDPDisplay` 一个能匹配的设备节点**：`OSKextLoadKextWithIdentifier` 已能把它
+   加载并注册（`reg2=f`），但它还需要设备树里匹配 `lcd,edp` 的节点（社区是自造
+   `/arm-io/disp0`）才会 attach，产生 provider 实例。
 3. **采集窗口**：`--capture` 放长到覆盖复位点，用真实 `USB LOST at` 时间戳
    把“武装后约 32 s”从推断变成实测。

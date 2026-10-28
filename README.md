@@ -228,12 +228,13 @@ darwinboot-memory-size  = 0x20000000    512 MiB 连续窗口
 
 其余已全部在板上跑通（见文首状态）。当前三条待办，按判别力排序：
 
-1. **把 `mask=7` 的歧义定死**：`allocClassWithName` 对“未注册”和“抽象类”都返回 NULL
-   （抽象类生成的 `alloc()` 恒返回 NULL），单靠 mask 分不开；改用
-   `getMetaClassWithName()` 对三个名字逐个判非空。
-2. **provider 实例从哪来**：自写 `IOMobileFramebuffer` 子类已在链接期被否证
-   （缺 `gMetaClass` / ctor / dtor——基类在 prelink 的 kext 里，不参与内核链接）。
-   社区路线是原版 `AppleCLCD` + 自造 `/arm-io/disp0` 节点。
+1. ~~把 `mask=7` 的歧义定死~~ —— **已定案**：`[nm] reg=0x7` 说明三个基类都已注册，
+   `mask=7` 只是“它们是抽象类”的表现。
+2. **给 `AppleDPDisplay` 配一个能匹配的设备节点**：`AppleCLCD` 不在 iPadOS 的
+   kernelcache 里，显示侧真身是 `com.apple.driver.AppleDPDisplay`（匹配 `lcd,edp`），
+   它已被实测能加载并注册（`[nm] late load=0 reg2=f`）；还差设备树里匹配的节点
+   （社区是自造 `/arm-io/disp0`），才会 attach 出 provider 实例。
+   自写 `IOMobileFramebuffer` 子类那条路已在链接期被否证（缺 `gMetaClass` / ctor / dtor）。
 3. **把“咬合 = 武装后约 32 s”从推断变成实测**：把 `--capture` 放长到覆盖复位点，
    用真实的 `USB LOST at` 时间戳定。
 
