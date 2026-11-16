@@ -13,3 +13,6 @@
 __pycache__/
 *.pyc
 .cache/
+
+# the touch controller image is a build input, not an artifact
+!firmware/*.bin

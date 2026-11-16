@@ -1,33 +1,140 @@
 # UniXNU on Xiaomi Pad 5 (nabu / SM8150)
 
-在 **小米平板 5（nabu，骁龙 860 / SM8150）** 上通过 UEFI 启动 **苹果 XNU 内核** 的完整移植记录。
+在 **小米平板 5（nabu，骁龙 860 / SM8150）** 上通过 UEFI 启动 **苹果 XNU 内核**，
+运行 **iPadOS 17.7.11 (21H461)** 用户态的完整移植记录。
 
-> **本仓库记录的是「推倒重来」之前的那条线。** 当前实际状态、以及旧文档里已经失效的说法，
-> 见 [`CURRENT-STATE.md`](CURRENT-STATE.md)；与旧文档冲突时**以它为准**。
+---
 
+## 现状：已达到原生桌面（2026-11-16）
+
+| 里程碑 | 状态 |
+|---|---|
+| 内核启动 → 用户态 | 完成 |
+| 系统 UI（锁屏） | 完成 — l730 |
+| **原生 Home Screen** | **完成 — l769** |
+| 触摸输入 | 完成 — 实测 `fingers 4→436`，client = `backboardd` |
+| GPU scanout 接管 | 完成 — l771，`P4/PF` 生效 |
+| **流畅度** | **未完成** — `present` 均值 221 ms，尾帧 844 ms |
+
+**桌面截图（l769 实机，800×1280）**
+
+![Home Screen](docs/screenshots/desktop-l769.png)
+
+**锁屏截图（l750 实机）**
+
+![Lockscreen](docs/screenshots/lockscreen-l750.png)
+
+> 剩余工作是**帧率**，不是「能不能开机」。
+> 当前显示路径是「原生 GPU 合成 + 每帧 CPU 16 MiB blit 到 GOP」，
+> 理论上限约 3.5–7 fps。要真正流畅需要让 GPU/DPU 接管最终搬运。
+
+---
+
+## 三次关键突破（为什么能到桌面）
+
+### 1. l730：交还系统 UI — 最后一道开机墙不是 GPU，是内核自己写错了 plist
+
+`sheng-mig=1` 把 264 B 强制迁移态写进了 `com.apple.migration` 的 CFPreferences 域，
+覆盖了 365 B 官方完成态，导致 `lastBuildVersionPref=(null)`，每轮强制重跑数据迁移，
+SpringBoard 永远不 `finishedStartup`。
+
+只改 **67 个文件字节**：保留官方完成态，把强制态写去无害路径 `com.apple.migratiox.plist`。
+结果：`Migration not necessary`、`finishedStartup:YES`、`Dismissing overlay`，锁屏出现。
+
+### 2. l750 / l738：DPU 直出可行
+
+`l737` 的 `Kernel data abort (esr 0x96000010)` 是**探针地址写错**
+（`0xae004000`，比真 VIG0 `0xae05000` 低 0x1000），不是 DPU 不可用。
+
+两个纯数据值即可打开 DPU 直出：
+
+```text
+native_ufs_dpu_state = 0x80000000   (bit31)
+mode = 2
+```
+
+> 注意：`ncpy=0` **不等于**零拷贝，该判读已撤回。
+
+### 3. l769：桌面 — SpringBoard 硬编码要上锁
+
+SpringBoard 开机固定走 `SBStartupTransitionToLockOut`，并硬编码
+`Boot{ForceLockKey:1}`。`SBDontLockEver` 等所有旁路均已否证。
+
+l769 把 `com.apple.springboard.plist` 里一个键做等长替换：
+
+```text
+MCForceShowCloudConfigurationUI=false  →  SBDontLockAfterCrash=true
+```
+
+`SBStartupTransitionFactory` 于是返回 `destination=1 / SBStartupTransitionToHome`，
+后果：
+
+```text
+ToHome · UI Locked:NO · 无 ForceLockKey · 主屏图标 + 壁纸 + Dock
+```
+
+整个包相对 l750 只差 **44 字节 / 1 簇**。
+
+---
+
+## GPU scanout 接管：两堵墙
+
+| 墙 | 根因 | 修复 |
+|---|---|---|
+| ① `P3 ee00002c2` | 内核 `nabuScanoutClient` 抢占了 handoff 的独占 `WAIT_SWAP client_` 槽，不是 VM/cache/WIMG 问题 | `0xa7c6d0` 处 **4 字节 NOP** |
+| ② `HostMemory/NotRepresentable` | GOP carveout 的 WIMG 被识别为 `Unknown` | 改为 `Cached`，**4 字节** |
+
+两堵墙破后：`P4/PF` 首次出现，GPU 服务 6 帧，桌面不回归。
+但 latency 仍有 `commit→complete 1.30 s`、`present 221 ms 均值 / 844 ms 尾帧`。
+
+---
+
+## 仓库结构
+
+| 路径 | 内容 |
+|---|---|
+| `drivers/` | 7 个板级驱动：`NabuAdreno`（101 文件）、`NativeUfs`（33）、`GopFramebuffer`（12）、`ArmCpu`（3）、`ShengNovatekTouch`（4）、`QcomGeniSpi`（2）、`AppleKeyStoreState`（1） |
+| `patches/xnu/` | 内核补丁序列至 `0017` + `sheng-platform-power` |
+| `board-run/reports/` | **73 份六问板报**，覆盖到 l771 |
+| `board-run/rounds/` | **135 份结构化轮次 JSON**（到 l738，之后改用板报形式） |
+| `board-run/state/` | 主交接文档（3,641 行）+ 板侧作业铁律 |
+| `configs/` | 两个 defconfig |
+| `tools/` | 板侧构建与采集脚本 |
+| `board.toml` | 板级配置，**保留逐轮编辑历史**（`board.toml.history` 为历史快照） |
+| `docs/screenshots/` | 实机桌面与锁屏 |
+| `CURRENT-STATE.md` | **权威状态摘要，与旧文档冲突时以它为准** |
+| `DOCS-INDEX.md` | 文档索引 |
+
+---
+
+## 观测通道（三条，各有明确边界）
+
+| 通道 | 覆盖 | 说明 |
+|---|---|---|
+| **CDC**（DWC3 串口） | 7–335 s，0.7–1.8 MB/轮 | 实时流；只有内核 printf；51→100 s 有 48.6 s 固定黑洞 |
+| **NABUDIAG 双槽** | 220 s / 300 s 两个快照 | 唯一能拿到用户态 os_log 的通道（解码后 20 万行级） |
+| **UFS NABULOG1** | 滚动窗口 | 仅 USB 功能死亡时使用（l749 就是这种情况） |
+
+**335 s 之后三条通道全空** —— 该区间不能用「没看到」推断「没发生」。
+
+细节见 [`nabu-usb-cdc`](https://github.com/Lux12138/nabu-usb-cdc) 与
+[`unixnu-nabu-autolog`](https://github.com/Lux12138/unixnu-nabu-autolog)。
+
+---
+
+## 板级事实（实测）
+
+> **本机是扩容版**：物理 DRAM **12 GiB**（TWRP 实测 `MemTotal = 11766512 kB`，
 > **本机是扩容版**：物理 DRAM **12 GiB**（TWRP 实测 `MemTotal = 11766512 kB`，
 > 即 12 GiB 减去约 816 MB 给 modem/hyp/rmtfs），userdata **约 468 GiB**
 > （`fastboot partition-size:userdata = 0x74167BB000`）。
 > 所以 `dram_size = 0x300000000` 是**为这台机器测出来的**，不是标准 6/8 GB 机型的数字。
 
-> **状态（2026-10-28，以此为准）**：**用户态已经跑起来了。**
->
-> - 根卷 + launchd 已通过：完整启动日志 **146 KB / 2,032 行**（与自动复位同一轮取得）；
-> - runningboardd / backboardd / SpringBoard 都在运行，各自在自己的 mqueue 上等消息
->   （`[hb] tag=chk n=68 sb=1 bb=1 rb=1 cfg=1`），keybagd 走
->   `DEVICE HAS EPHEMERAL DATA VOLUME, SKIP INIT`；
-> - 显示：`[nm] mask=7 size=1336 init=1`（三个抽象基类**名字**不可实例化，
->   `IOMobileFramebufferUserClient` 可分配且 init 成功）；运行期唯一显示相关失败是
->   `[ex] pid=26 comm=IOMFB_FDR_Loader rv=0x100 sig=0 code=1`。**缺的是一个 provider 实例**；
-> - 每轮已无人值守：86~129 s 跑完一轮、零按键（CDC 控制通道 + WDT 定时停车的细节见
->   公开仓库 [`nabu-usb-cdc`](https://github.com/Lux12138/nabu-usb-cdc) 的 `docs/07`）。
->
-> **历史状态（2026-10-25，已被上面取代）**：内核执行到 `execve("/sbin/launchd")`，
-> `Process 1 exec of /sbin/launchd failed, errno 2`；当时缺的是装了系统文件的根文件系统。
+
 
 ---
 
-## 一、里程碑：内核走到了 launchd
+## 附：早期里程碑（历史，已被上面取代）
 
 **屏幕证据**
 
@@ -222,25 +329,39 @@ darwinboot-memory-size  = 0x20000000    512 MiB 连续窗口
 
 ---
 
-## 六、下一步（2026-10-28 更新）
+## 下一步（2026-11-16）
 
-**唯一硬阻塞：给 `IOMobileFramebuffer` 提供一个 provider 实例。**
+**功能性目标已达成，剩余是流畅度。** 按判别力排序：
 
-其余已全部在板上跑通（见文首状态）。当前三条待办，按判别力排序：
+1. **定位 present 长尾**：当前 `present` 均值 221 ms、尾帧 844 ms，且
+   启动期 pipeline compile 与长尾共现，因果未分离。需要无触摸的稳态数据
+   才能判断是 GPU 频率、GOP UC 映射还是 CA 提交节奏。
+2. **核实 Metal 完成等待是否存在死锁**：上游同 SoC 方案
+   ([`zzweiqing/UniXNU-nabu`](https://github.com/zzweiqing/UniXNU-nabu))
+   定位到 `dispatch_group_wait(_handlers, DISPATCH_TIME_FOREVER)` 会在
+   两种情况下死锁——投递批次排在本调用者之后，或 handler 等自己的 buffer。
+   其补丁（26 行）已打包但尚未在该项目上板验证。本项目尚未核对自身实现
+   是否有同样模式。
+3. **补遥测完整性**：CDC 目前是原始字节流，48.6 s 黑洞只能靠时间跳变反推。
+   上游方案（`NABULOG2`）带 CRC、序号、boot/build id 与丢包计数，
+   可直接判定「丢了没、丢多少、从哪丢」。
+4. **扩展到 335 s 之后**：当前三条通道在该区间全空，而 WDT 咬点在
+   380–410 s，正好是最有价值的窗口。可行方向是修 CDC 重连（成本最低）
+   或把 `diagAt1` 后移（但 400/500 已被证明会早死，300 是实测临界点）。
+5. **桌面持久化**：当前是临时轮（一次性包），未固化到默认 args 或编译侧。
 
-1. ~~把 `mask=7` 的歧义定死~~ —— **已定案**：`[nm] reg=0x7` 说明三个基类都已注册，
-   `mask=7` 只是“它们是抽象类”的表现。
-2. **给 `AppleDPDisplay` 配一个能匹配的设备节点**：`AppleCLCD` 不在 iPadOS 的
-   kernelcache 里，显示侧真身是 `com.apple.driver.AppleDPDisplay`（匹配 `lcd,edp`），
-   它已被实测能加载并注册（`[nm] late load=0 reg2=f`）；还差设备树里匹配的节点
-   （社区是自造 `/arm-io/disp0`），才会 attach 出 provider 实例。
-   自写 `IOMobileFramebuffer` 子类那条路已在链接期被否证（缺 `gMetaClass` / ctor / dtor）。
-3. **把“咬合 = 武装后约 32 s”从推断变成实测**：把 `--capture` 放长到覆盖复位点，
-   用真实的 `USB LOST at` 时间戳定。
+### 已否证的方向（别再试）
 
-> **历史（2026-10-25 的下一步，已取代）**：把解出来的根做成一个能挂的卷
-> （`./unixnu build userdata` + `fastboot flash userdata`）。现在根卷走 APFS +
-> **nabuvar**（内存卷挂 `/private/var`），不再需要刷 userdata。
+| 方向 | 结论 |
+|---|---|
+| `nanu-gpu-scanout=1` | 数学上必然失效：GOP `0x9c000000+0xfa0000` 落在 DRAM 管理区内部 |
+| `adrenoprobed` | 未被 launchd 加载，且只导 `oslog.txt.gz` |
+| `PF/PX/P0..P4 = 0` 当失败判据 | 走 GPU7 标记流，本内核 capture hook 是空实现 |
+| `ncpy = 0` 当零拷贝证据 | 已撤回 |
+| 纯 WIMG 单字节常量轮 | l732/l733 证明无效 |
+| `span_capacity` 单字节缩容 | l735/l736 证明 32000 B 仍分配失败 |
+| `nabu-dpu=1/2` 探针 | l737 触发 `data abort`，DPU 第一道门关闭 |
+| 纯时间常数（`pet`/`diag` 后移） | l724/l725/l728 均阴性 |
 
 ---
 
