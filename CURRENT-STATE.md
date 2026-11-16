@@ -180,7 +180,11 @@ GPU 服务 6 帧
 
 ## 8. 历史文档说明
 
-根目录 `HANDOVER-2026-10-2x.md` / `STATUS.md` / `PLAN.md` / `FLOW.md` /
-`PREDICTIONS.md` / `HANDOVER-legacy.md` 均为**重写之前**的记录，只作追溯。
+`docs/history/` 下的 `PLAN.md` / `FLOW.md` / `PREDICTIONS.md` /
+`HANDOVER-2026-10-24.md` / `HANDOVER-2026-10-25.md` / `HANDOVER-legacy.md` /
+`STATUS.md` 均为**重写之前**（2026-10-2x）的记录，只作追溯。
 其中「AppleCLCD 是显示真身」「靠 UFS 窗口读日志」「panic 路径 PSCI 复位」
 等说法均已被否证，以本文为准。
+
+根目录的 [`STATUS.md`](STATUS.md) 是 2026-11-16 重写的**短版仪表盘**，
+与本文同源、不冲突；两者若有出入，仍以本文为准。

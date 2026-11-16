@@ -1,14 +1,15 @@
 # 文档索引
 
 > **只需要读两份：`README.md` 和 `CURRENT-STATE.md`。**
-> 其余都是专题或历史，按需查阅。
+> 想快速看一眼「现在到哪了」就读 `STATUS.md`。其余都是专题或历史，按需查阅。
 
-## 必读（2 份）
+## 必读（3 份）
 
 | 文件 | 内容 |
 |---|---|
 | [`README.md`](README.md) | 项目总览：现状、三次关键突破、仓库结构、观测通道、**路线图（还缺哪些驱动）**、已否证方向 |
 | [`CURRENT-STATE.md`](CURRENT-STATE.md) | 权威状态摘要。**与其他任何文档冲突时以它为准** |
+| [`STATUS.md`](STATUS.md) | **短版仪表盘**（2026-11-16）：七层目标表、桌面 os_log 铁证、三个观测坑、ADT 差异、vsync 传递链、五条下一步、九条禁令 |
 | [`CREDITS.md`](CREDITS.md) | **参考与来源**：上游依赖、参考对象、原创边界、分目录许可证 |
 
 ## 专题（按需）
@@ -36,7 +37,7 @@
 | `docs/history/HANDOVER-2026-10-25.md` | 旧路线的最后一份交接（卡 Mi logo） |
 | `docs/history/HANDOVER-exec-fault.md` | execve/SIGKILL 链条（29 KB，最详实的失败分析） |
 | `docs/history/HANDOVER-legacy.md` | 最早期的历史（40 KB） |
-| `docs/history/STATUS.md` | 逐轮状态流水（908 行） |
+| `docs/history/STATUS.md` | 逐轮状态流水（908 行，**已作废**；现行短版在根目录 [`STATUS.md`](STATUS.md)） |
 | `docs/history/FLOW.md` / `PREDICTIONS.md` | 旧的启动流程图与预判清单 |
 | `docs/history/START-HERE.md` | 旧的新手入口 |
 | `docs/history/PUSH-GOTCHA.md` | ⚠️ **仍然有效**：`git push` 返回 exit=0 但远端未变的坑 + 正确三步法 |
