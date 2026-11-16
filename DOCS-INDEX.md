@@ -14,6 +14,7 @@
 
 | 文件 | 内容 | 什么时候读 |
 |---|---|---|
+| [`uefi-nabu`](https://github.com/Lux12138/uefi-nabu) | **UEFI 固件仓库**（启动链第一环）：FD 3 MiB @ `0x9FC00000`、UniXNU 四模块、APSS 看门狗 | 要改固件或复现启动时 |
 | [`docs/screenshots/`](docs/screenshots/) | 实机桌面（l769）与锁屏（l730） | 想确认进度时 |
 | [`board-run/reports/`](board-run/reports/) | **73 份六问板报**，覆盖到 l771。每份含：唯一问题 / 已闭合到哪 / 为什么离线不行 / 失败也有信息 / 唯一变量与回滚点 / 恢复预案 | 想复现某一轮的推理时 |
 | [`board-run/rounds/`](board-run/rounds/) | 135 份结构化轮次 JSON（kernel/payload/args/verdict） | 想查某一轮的参数与结论时 |

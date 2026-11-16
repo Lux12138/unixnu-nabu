@@ -112,6 +112,67 @@ ToHome · UI Locked:NO · 无 ForceLockKey · 主屏图标 + 壁纸 + Dock
 
 ---
 
+## 启动链的四个仓库（各自负责一段）
+
+整条链不是单一仓库能覆盖的，四段各有归属：
+
+```text
+XBL → ABL → [uefi-nabu] → UniXNU 菜单 → DarwinBoot → XNU 内核 → [drivers/] → 用户态
+              ↑                                          ↑
+        固件（本仓库不含）                        内核与驱动（本仓库）
+```
+
+| 仓库 | 负责 | 内容 |
+|---|---|---|
+| **[`uefi-nabu`](https://github.com/Lux12138/uefi-nabu)** | **UEFI 固件** | fork 自 `UniXNU/uefi-sheng`，基于 Project Silicium + Project Mu。加入 UniXNU 四个模块、固件日志导出、APSS 看门狗 |
+| **本仓库** | 内核与板级驱动 | `drivers/`（7 个）、`patches/xnu/`（23 个）、`configs/` |
+| [`nabu-usb-cdc`](https://github.com/Lux12138/nabu-usb-cdc) | 实时日志通道 | DWC3 CDC 串口 |
+| [`xnu-linux-toolchain`](https://github.com/Lux12138/xnu-linux-toolchain) | 构建工具链 | Linux 上编 XNU 的 clang/cctools-port/mig/iig |
+
+### UEFI 固件的关键参数
+
+| 项 | 值 |
+|---|---|
+| FD base / size | `0x9FC00000` / `0x300000`（3 MiB） |
+| 帧缓冲 | 1600 × 2560 × 32bpp |
+| System memory base | `0x80000000` |
+| UEFI stack | `0x9FF90000`，每核 256 KiB |
+| Advanced Logger | `0x9FF00000`，`0x80` 页 |
+| SMBIOS | Xiaomi / Pad 5 / nabu / 21051182G / K82 |
+| boot image | header v1，gzip 压缩 FD，`page_size=2048` |
+| `USE_CUSTOM_DISPLAY_DRIVER` | **1**（厂商显示链 `CPRDxe` + `DisplayDxe` 会加载） |
+
+### 产物形态
+
+`fastboot boot` 吃的是 **Android boot image**（`ANDROID!` v1），不是裸 FD：
+
+```text
+boot-merge-r3.img  3,041,280 B  sha256 ead4b531…
+  ├─ header   2,048 B
+  └─ kernel   3,039,032 B   ← gzip(3,145,920 B 的 UEFI FD)
+     ramdisk  0（payload 在 cust 分区，不在 boot image 里）
+```
+
+刷写流程：`fastboot flash cust payload.img` → **最后**重新 arm `misc` 的
+`boot-recovery` → `fastboot boot boot-merge-r3.img`。
+
+### 构建
+
+```bash
+./unixnu build firmware --uefi ../uefi-nabu
+```
+
+独立的 `python build_uefi.py -d nabu` **不能用**——它不注入 UniXNU 的包路径，
+`UniXNUPkg` 与 `DarwinBootPkg` 的组件会解析失败。
+
+### 一个值得记的教训
+
+`NabuWdtDxe` 的入口点**故意不碰块设备**：它在 `PartitionDxe` / `FatPkg`
+起来之前运行，2026-10-26 有一次在那里做无界 `ReadBlocks`，把板子卡死
+且没有复位源。所有存储访问都放在 `ReadyToBoot`。
+
+---
+
 ## 观测通道（三条，各有明确边界）
 
 | 通道 | 覆盖 | 说明 |
@@ -426,4 +487,7 @@ darwinboot-memory-size  = 0x20000000    512 MiB 连续窗口
 
 - [`Allenwdk/xnu-linux-toolchain`](https://github.com/Allenwdk/xnu-linux-toolchain) —— Linux 交叉工具链
 - [`1PJL/unixnu-nabu`](https://github.com/1PJL/unixnu-nabu) —— UFS 卷诊断系列（`Recover GPT` / `Build Volume` / `Repack` 三步，跑在 `ubuntu-24.04` 上）
-- `UniXNU` 上游 —— 内核移植与 UEFI 启动链
+- [`Lux12138/uefi-nabu`](https://github.com/Lux12138/uefi-nabu) —— 本项目的 UEFI 固件（fork 自 `UniXNU/uefi-sheng`）
+- [`Lux12138/nabu-usb-cdc`](https://github.com/Lux12138/nabu-usb-cdc) —— CDC 实时日志通道
+- [`Lux12138/xnu-linux-toolchain`](https://github.com/Lux12138/xnu-linux-toolchain) —— Linux 交叉工具链
+- `UniXNU` 上游 —— 内核移植框架
