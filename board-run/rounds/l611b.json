@@ -1,0 +1,38 @@
+{
+ "tag": "l611b-touch-partitions4",
+ "date": "2026-11-05",
+ "question": "把固件 16 项里 size≠0 的另外两个二级头（SRAM 0x2c198 / 0x2c298）补进写表后，芯片状态会不会从 0x9f 进入 0xa0..0xaf",
+ "answer": "会。首字节 0x9f -> 0xa1 -> 0xa3，落在 0xa0..0xaf 且稳定；fw info 四项与厂商地面真值完全一致。但读帧全部 bad-sum，触摸尚不可用。",
+ "kernel": "c91b196c3517878d (与 l611 逐字相同，只重打 payload)",
+ "payload": "5ff5d21ff35f53cb",
+ "boot": "ead4b531",
+ "args": "657 chars / 36 tokens / 658 with NUL; 无 sheng-smp / 无 exception_log_max_pid; arm-delay=0; tag=l611",
+ "single_core": true,
+ "ring_header": "NABULOG1 v1 flags=0 panic=0 length=98304 dropped=0 total=364658",
+ "pon": "0x80041",
+ "t_max_s": 374.47,
+ "nabusmp1": "st=0,0,0,0,0,0,0 (single core as designed)",
+ "touch_download": {
+  "chunks": "p=0/p=1/p=2(0x2c198,len=256)/p=3(0x2c298,len=256) all ok=1",
+  "verify": "p=0,1,2,3 all ok=1 same=1 (12 samples)",
+  "fullcrc": "p=0 c0f3ab59 ok, p=1 c04a7602 ok (p=2/3 by design not in bank)",
+  "boot_samples": "t=0 a1620c2320 -> t=528 a30c0c2320 -> t=5224 a30c0c2320",
+  "download_line": "try=0 sent=1 dma=0 reset-state=0xa3 pid=0x5953 booted=1 ms=52557",
+  "fw_info": "ver=0x19/0xe6 xnum=32 ynum=50 xmax=1600 ymax=2560 type=0x1 (info[0]+info[1]=0xff)",
+  "fw_info_hex": "19e6203206400a000e0a00010301001032004006280a0000000c010000000000001353590406",
+  "chip_reset": "中途出现 firmware reset pattern; downloading again，第二次重下同样 a3/5953"
+ },
+ "touch_frames": {
+  "status": "reads=12659 fingers=0 bad-sum=12648 reports=0 last=0 latch=11",
+  "verdict": "全部坏帧，无触点、无 HID 报告"
+ },
+ "ring_counters": "NABUSTATE1 tch=0/0 hids=0/-1/-1/0 hidr=0 hidself=0",
+ "display": "fbcon=4 nswap=5 fr=5；panic=0；PreBoard 0",
+ "verdict": "PASS for the question: the two 255-byte secondary headers were the missing piece; firmware now boots and reports correct identity. Touch data path still broken (frame checksum).",
+ "next": "帧读取：打印 32 B THP 头的 +4/+8 与 +12/+16 互补校验字，并列出我们计算 bad-sum 的覆盖区间与算法，再定是算法还是起始偏移",
+ "notes": [
+  "spi_dma_tx_info 读到 0 = 已清，不需要重试环；本轮未改该逻辑仍 boot 成功",
+  "更正：sources 与编译一致；采样点 0/0.52/5.2/52 s 是补丁单位错（absolutetime_to_nanoseconds 收了纳秒值），代价是 polling 前白烧 ~52 s",
+  "fw info 8/8 字段与 TWRP 原厂值一致（valid/ver/x/y/xmax/ymax/type/PID）"
+ ]
+}

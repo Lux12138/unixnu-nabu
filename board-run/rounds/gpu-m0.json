@@ -1,0 +1,11 @@
+{
+ "ts": "2026-11-04T05:00:24",
+ "pkg": "merge-legacy-l520",
+ "payload_sha": "004a1c9b9ff56915c08b3cf5af4e5156dee6724aa7387c4e2858dd080b25ce6b",
+ "tag": "gpu-m0",
+ "ok": false,
+ "error": "no NABUSTATE1; serial tail: 1101 | nabu: spawn err=0 t=7044945244 dur=178469 pid=255 path=/usr/sbin/bluetoothd rd=243384 rt=2135184888 vb=1033373 tmr=2461635 irq=4821101 | nabu: spawn> pid=1 t=7086181806 path=/usr/libexec/xpcproxy rd=243421 rt=2135322224 vb=1033450 tmr=2462408 irq=4821874 | nabu: exec> pid=256 t=7086223233 path=xpcproxy | nabu: exec done pid=256 t=7086244814 err=0 tmr=2462410 irq=4821876 | nabu: spawn err=0 t=7086250840 dur=69034 pid=256 path=/usr/libexec/xpcproxy rd=243421 rt=2135322224 vb=1033450 tmr=2462411 irq=4821877 | nabu: spawn> pid=256 t=7086551802 path=/usr/sbin/fairplayd.A2 rd=243421 rt=2135322224 vb=1033450 tmr=2462416 irq=4821882 | nabu: exec> pid=256 t=7086704760 path=fairplayd.A2 | nabu: exec done pid=256 t=7086760316 err=0 tmr=2462421 irq=4821887 | nabu: spawn err=0 t=7086767730 dur=215928 pid=256 path=/usr/sbin/fairplayd.A2 rd=243421 rt=2135322224 vb=1033450 tmr=2462421 irq=4821887",
+ "t_s": null,
+ "state_line": null,
+ "fields": {}
+}

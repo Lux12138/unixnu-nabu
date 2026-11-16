@@ -1,0 +1,43 @@
+{
+ "tag": "l701",
+ "when": "2026-11-10T14:28:04",
+ "question": "union mount 到 /System/Library/Extensions 到底成没成？用官方 nabu-gpu-addon: 功能结果行读 mounted/target/control/status。",
+ "kernel": "fb3ce14254fd (= l695r kernel 1f82e4a3 + 4 字节 APFS nop)",
+ "payload": "806f4c8f",
+ "adt": "78a6f7e9",
+ "gpu_addon": "39dc17fe (新版)",
+ "trust_cache": "76783683",
+ "boot": "ead4b531",
+ "args": "694/38 — 与 l700 逐 token 相同（含 tag=l700）；唯一变量是 kernel",
+ "boot_at": "14:28:04",
+ "recovery_at": "14:32:45",
+ "window_s": 281,
+ "cdc_file": "logs/l701-cdc.bin (351132 B)",
+ "diag": {"oslog": "logs/l701-v1.jsonl (121220 行, 24728 条正文)"},
+ "method": "零重编、零源码改动、零新探针。取 hold/l695r/kernel.macho（自带框架官方功能结果行 zzyb-native-cryptex-os-view.patch:177 / 编译树 kern_exec.c:7757），把唯一的 08214439 a8000037 中 a8000037 换成 1f2003d5（tmp/apfs_nop.py 同款，l673 起每轮都做）。补前 1f82e4a3 / 补后 fb3ce142，逐字节仅差 4 字节。mcopy 覆盖 payload 的 KERNEL~1 MAC，抽回 sha 一致。",
+ "qoder_alignment": "符合 feedback-no-custom-probes（不新增打印，用官方已有的功能结果行）、feedback-boot-audit-must-prove-bootability（五项全过）、feedback-regression-ladder-and-rollback（回滚点 l700 明确）。§7k 的『给 NativeAdrenoService.cpp 加 IOLog』方案按这些红线已放弃并完整回滚。",
+ "result": {
+  "official_line": "nabu-gpu-addon: mounted=1 target=1 control=1 status=0 | dmn=5/0 | wlp=1/2",
+  "addon_install": "nabu-addon: files=8 wr=8 same=0 fail=0 err=0 publish=0 — publish=0 是 0017-nabu-addon-diag.patch:17 探测旧版同级 NativeAdrenoMetal.publish 的过时读数；新版 marker 在 bundle 内 Info.plist 的 NativeAdrenoPublish=true，8 条目里本无该文件。有效读数为 8 文件全写入、零失败（见 HANDOVER §7r）。",
+  "frames_line": "nabu-display: frames xfer=6 nswap=6 nsurf=2 sbytes=16384000 nok=6 ncpy=6 nret=6 fingers=0 | addon=5/0 dmn=5/0 wlp=1/2",
+  "GPUACC": "NABU GPUACC published cls=AGXAccelerator id=4294967755 props=5",
+  "NABU_GPUABI_pre": "es class=... size=136 class_name=IOAcceleratorES super=IOService (2 行, =1 只 report 不加载 kext)",
+  "panic": 0,
+  "unencrypted_panic": 0,
+  "buf_bread_err16": 0,
+  "frames": 6
+ },
+ "oslog_key_counts": {
+  "surface import refused": 0, "HostMemory": 0, "NotRepresentable": 0,
+  "MetalPluginName": 0, "NativeAdrenoMetal.bundle": 0, "CAContext": 0, "CALayer": 0,
+  "CARenderServerStart": 0, "BKDisplayLink": 0, "PUB ": 0, "no device answer": 0,
+  "/System/Library/Extensions": 0, "NativeAdrenoPublish": 0
+ },
+ "verdict": "DECISIVE（否定一个长期候选，且是干净的完整轮）。union mount 完全成功：mounted=1（bindfs 挂载成功）、target=1（owner 的 NativeAdrenoMetal.bundle/Info.plist 可见）、control=1（sealed 下层 AGXMetalA10.bundle 可见）、status=0、dmn=5/0（LaunchDaemons union 也到 stage 5）；frames 行的 addon=5/0 是第二个独立佐证。补 4 字节 nop 后无 panic、无 unencrypted panic、无 buf_bread err16，281 s 正常回 TWRP（重编内核早死风险未出现）。但 os_log 里 MetalPluginName / CAContext / PUB 仍全 0 ⇒ iOS 侧 AGX/IOGPU 依然没走 Metal 发现路径。",
+ "root_cause_final": "⛔ RETRACTED 2026-11-10（见 HANDOVER §7q）：本节曾把 Sandbox/MACF deny 当作最终根因，错误。shipped kernel 已应用 zzw/zzwb grant 补丁，IOUserClient.cpp:4390/4549-4555 对 NativeSandboxGrantProcess=backboardd 短路两道真实 MACF 准入检查；NativeAdrenoPublish.cpp:1724 在驱动自己 newUserClient 里的诊断 mac_iokit_check_open 调用会打印 deny 但不拒绝连接（真正准入在 :1801 connection->mount）。l699 的 266 次 externalMethod + Query/BoAlloc/BoMap 成功证明 backboardd 连接已建立；l701 里只有 mediaserverd 的 deny 与 IOUC failed MACF 成对。当前真实断点未确定，位于连接建立之后。",
+ "why_it_matters": "本轮真正闭合的是：union mount 完全成功、插件 bundle 可见、APFS nop 补回后 281 s 正常窗口。『MetalPluginName / CAContext / PUB 仍全 0』这些计数不能证明发现没跑（成功路径静默）；旧的『iOS 侧没走 Metal 发现』判读已作废。当前应纯离线查连接建立之后到首帧之间的断点，不再补类/属性/挂载/插件，也不申请放宽 sandbox。",
+ "device_state": "TWRP f91fa664，正常回，boot_a 未碰",
+ "next": "纯离线定位『连接已建立 → IOGPUDevice/插件/CAContext/首帧』之间的断点：先用 l701-v1.jsonl 的 AGX/Metal/IOGPU/backboardd 宽匹配按时间重读，再对账 externalMethod selector、IOGPUDeviceCreate / initWithAcceleratorPort:、plugin bundle Info.plist 期望键。零上板、零新探针、零重编；不要申请放宽 sandbox。",
+ "gates": {"audit_bootability": "OK 0fail/0warn", "audit_dual": "7/7", "precheck": "stamp OK (args 零增删)", "nop_diff": "仅 4 字节"},
+ "rollback": "hold/l700 (efcb4c34, 已验证)"
+}

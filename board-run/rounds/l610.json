@@ -1,0 +1,29 @@
+{
+  "tag": "l610-smp-7core",
+  "date": "2026-11-05",
+  "question": "去掉 sheng-smp-single 后，7 个次核能否全部走完同一条入口链到 step 7",
+  "kernel": "6b910a5775abd72f",
+  "payload": "9e8a5710e1b4393c",
+  "boot": "ead4b531",
+  "args": "669 chars / 37 tokens / 670 with NUL; only change vs l609 = drop sheng-smp-single=1",
+  "ring_header": "NABULOG1 v1 flags=0 panic=0 length=98304 dropped=0 total=365073",
+  "pon": "0x80041",
+  "t_max_s": 289.72,
+  "nabusmp1": "boot=81000000 st=7,7,7,7,7,7,7 fl=0,0,0,0,0,0,0 rc=0,0,0,0,0,0,0 (8 samples identical)",
+  "smpmn1": "28 lines = 7 ids x 4 samples; every line st=7 sctlr=3454593d; stage/sid are a single global (0x23/7) per fc76 correction",
+  "smptbl8": "8 slots all non-zero pa/va; phys column all 0 because the guard (va>>32)==0xfffffff0 does not match kalloc VA 0xfffffff163xxxxxx (top32=0xfffffff1)",
+  "timing": {
+    "exec_done_pid1_s": 48.19,
+    "first_spawn_s": 96.53,
+    "spawn_le_120s": 153,
+    "spawn_le_150s": 387,
+    "spawn_le_250s": 510,
+    "l609_exec_done_s": 46.18,
+    "l609_first_spawn_s": 99.01
+  },
+  "display": "PreBoard 0 spawns, panic 0",
+  "verdict": "PASS - all 7 secondaries reached step 7 (MMU on, sctlr=3454593d) with fl=0. Because step 7 is set only after _reset_vector matched each core's MPIDR against its table entry, the phys_id 0x100..0x700 mapping is proven even though SMPTBL8 printed phys=0.",
+  "instrument_bug": "SMPTBL8 guard still too narrow: kalloc cpu_data VA is 0xfffffff1_63xxxxxx, so (va>>32)==0xfffffff0 fails. Fix: accept (va>>32)>=0xfffffff0 or top byte 0xff. Cosmetic only this round.",
+  "window_note": "round ended at t=289.7 s (PON 0x80041), ~62 s earlier than l609's 352 s; 7 cores shorten the usable window - future rounds must target < 280 s",
+  "next": "touch firmware variant (fw01 vs fw02 by display-maker) is the live lane; SMp is functionally done"
+}

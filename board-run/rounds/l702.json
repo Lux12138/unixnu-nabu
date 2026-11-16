@@ -1,0 +1,32 @@
+{
+ "tag": "l702",
+ "when": "2026-11-10T17:50:14",
+ "question": "修掉 Metal 插件 publish::requested() 的 4 字节路径 bug 后，能否走出 stage-1、注册 MTLDevice、出现 UI？",
+ "kernel": "fb3ce142",
+ "payload": "b91cfe98",
+ "adt": "78a6f7e9",
+ "gpu_addon": "950a3968 (4 字节 exe 补丁 + 整链重签)",
+ "trust_cache": "a4a6bae6",
+ "boot": "ead4b531",
+ "args": "694/38 — 与 l701 逐 token 相同（含 tag=l700、nabu-gpu-abi=1）",
+ "boot_at": "17:50:14",
+ "recovery_at": "17:55:26",
+ "cdc_file": "logs/l702-cdc.bin (347448 B, 合并 cdc-175053 + cdc-175137)",
+ "diag": {"full": "logs/l702-diag-full.bin (SHEXR001 32329477 B, 325 records)", "tree": "logs/l702-diag-tree/", "oslog": "logs/l702-v1.jsonl (121436 行)", "screen": "logs/l702-screen.bgrx.bin"},
+ "method": "板上 exe NativeAdrenoMetal 的 publish::requested() 在 0x40d4 用 strb wzr,[x0],#1 写 NUL 后把 'Info.plist' 写到 NUL 之后，stringWithUTF8String: 仍读 path 基址 => 读到目录、恒 false。改为 add x0,x0,#1 (1f140038 -> 00040091)，让 snprintf 直接覆盖原可执行文件名。整链重签：CD 页哈希 -> cdhash ba5a873d->a7b7ff5b -> owner-trust.bundle -> gpu-addon.bin -> payload 内 kernel.macho.trustcache/gpuaddon。零重编内核、零新探针、零安全放宽。",
+ "result": {
+  "official_line": "nabu-gpu-addon: mounted=1 target=1 control=1 status=0 | dmn=5/0 | wlp=1/2",
+  "addon_install": "nabu-addon: files=8 wr=8 same=0 fail=0 err=0 publish=0 (publish=0 是过时诊断探测旧 .publish，不是失败)",
+  "frames": "xfer=5 nswap=5 nsurf=2 nok=5 ncpy=5 nret=5 fingers=113",
+  "screen": "iBoot Apple Logo 残留，sha ca18b728a7def68e，10255 非黑 / 9964 纯白 / bbox 344..457,548..688；与 l701/l690/l697/l698 逐字节相同",
+  "oslog": "121436 行；新版插件 uuidtext 4C4C4419 在 :60238-60243 有 6 行 native-metal: no device answer (l701=0，l696/l697 旧插件各 6 行) => 证伪「插件没被加载」，但成功路径静默，不能判 requested() 是否 true",
+  "PUB_ST_CAContext_CALayer_MTLDevice": 0,
+  "panic": 0,
+  "unencrypted_panic": 0,
+  "buf_bread_err16": 0
+ },
+ "verdict": "DECISIVE-PARTIAL：4 字节修复与整链重签可启动、union 全通、插件 exe 确在 backboardd 内映射；但屏仍 iBoot Logo，os_log 无 CAContext/CALayer/MTLDevice/CARenderServerStart。现有官方通道无法区分「requested() 仍 false」与「已 true 但 deviceForPort 后失败」，故 l703 用内核已有 nabu-gpu-observe 官方通道取运行期计数。",
+ "gates": {"audit_bootability": "OK 0fail/0warn (base l701)", "audit_dual": "7/7 equal", "precheck": "OK", "independent_review": "反汇编/CD 5369 页/trust/seal/payload 10 项/门禁戳全一致；trust 模块 UUID 随 uuid5 变 16B，无功能后果"},
+ "rollback": "hold/l700 (efcb4c34) / hold/l701 (fb3ce142)",
+ "device_state": "TWRP f91fa664，boot_a 未碰"
+}

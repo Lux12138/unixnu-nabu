@@ -1,0 +1,19 @@
+{
+ "tag": "l716",
+ "kind": "BACKFILLED AFTER HISTORY AUDIT (2026-11-11)",
+ "when": "2026-11-11T10:41:51",
+ "boot_at": "10:41:51",
+ "recovery_at": "10:48:20",
+ "question": "l706-l716 连续临时轮；详见 HANDOVER §7aa/§7ad/§7ae/§7af/§7ag",
+ "variable": "l714 kernel + nabu_mig_force runSetupAssistant=true→false",
+ "package": "kernel 1209bcc5 / payload 047e1915",
+ "args": "685/38（CDC 回现实测）",
+ "args_full": "-v serial=3 debug=0x14e native-ufs-root=1 native-ufs-diagnostics=1 nabu-unverified-root=1 sheng-pmgr=2 nabu-log=1 nabu-panic-restart=2 nabu-timer-intid=19 sheng-log=1 qcom-usb-debug=1 qcom-usb-prepare=1 qcom-usb-ctl=1 armcpu-self-ipi=1 offline-mobile-graphics-load=1 offline-legacy-register=1 offline-legacy-gop=1 nabu-io-throttle-off=1 -apfs_shared_datavolume nabu-ufs-fua=0 nabu-ufs-lock-wait=1 offline-legacy-validate=1 offline-legacy-pm=1 offline-legacy-phase=4 offline-legacy-retire=1 nabu-fbcon=0 nabu-gpu=1 nabu-touch=1 nabu-wdt-arm-delay=0 sheng-smp=1 nabu-usb-reboot=1 sheng-aks=1 sheng-gpu-addon=1 offline-legacy-transfer=1 sheng-fb-gpu=1 t733-managed-rt-normal=1 sheng-mig=1",
+ "screen": "112b94b6b55a348f",
+ "verdict": "runSetupAssistant=false 后 frames 仍 ncpy=3 但屏退回纯黑；机制待证。",
+ "authorization": "用户授权自动推进/临时插帧/数据补丁；一次性临时轮，不进默认 args。",
+ "gates": "该轮当时已过全套门禁与六问板报（见 state/board-report-l716.md）；本文件为事后补写，不替代当时板报。",
+ "rollback": "hold/l700 / hold/l714",
+ "device_state": "TWRP f91fa664，boot_a 未碰",
+ "audit_note": "旧交接里过强因果与计数已按 §7ag 降级；不要据此重复 AKS/Buddy/Setup 反向补丁。"
+}

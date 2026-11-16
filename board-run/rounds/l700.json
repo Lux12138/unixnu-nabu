@@ -1,0 +1,32 @@
+{
+ "tag": "l700",
+ "when": "2026-11-10T13:22:23",
+ "question": "nabu-gpu-abi=1（只 report 不加载 kext）能否给出运行期 OSMetaClass 表里 IOAcceleratorES 的真实状态？",
+ "kernel": "efcb4c34 (= l699)",
+ "payload": "cc3e1dde",
+ "adt": "78a6f7e9",
+ "gpu_addon": "39dc17fe",
+ "trust_cache": "76783683",
+ "boot": "ead4b531",
+ "args": "694/38 (tag l700, t733-managed-rt-normal=1, nabu-gpu-observe=1 -> nabu-gpu-abi=1)",
+ "boot_at": "13:22:23",
+ "cdc_file": "logs/l700-cdc.bin (287999 B, 合并 cdc-132250 + cdc-132334)",
+ "note": "零改动的只读诊断轮。=1 只调 OSMetaClass::getMetaClassWithName + IOLog，不加载 kext（GpuAbiProbe.cpp:57/60），无同名 metaclass 冲突风险。",
+ "result": {
+  "GPUABI_pre_ctl": "name=0xfffffff5d32249e0 class=0xfffffff00c1993f8 size=136 class_name=IOService",
+  "GPUABI_pre_es": "name=0xfffffff5d32398c0 class=0xfffffff00c19c088 size=136 class_name=IOAcceleratorES super=0xfffffff00c1993f8 super_name=IOService",
+  "GPUABI_load_or_post": "0 行（确认 =1 没加载 kext）",
+  "GPUACC": "NABU GPUACC published cls=AGXAccelerator id=4294967755 props=5",
+  "service": "NativeAdrenoA6xx: service published chip=06040001 input_bits=32 output_bits=40",
+  "frames": "xfer=5 nswap=5 nsurf=2 sbytes=16384000 nok=5 ncpy=5 nret=5",
+  "panic": 0
+ },
+ "comparison_vs_l623": {
+  "l623": "NABU GPUABI pre es class=0 size=0 class_name=none（IOAcceleratorES 不在运行期表）",
+  "l700": "es class=0xfffffff00c19c088 size=136 class_name=IOAcceleratorES super=IOService",
+  "delta": "l626/l627 加入的 NativeAdrenoAcceleratorPublish.cpp 已把伪造的 IOAcceleratorES 注册进运行期 metaclass 表；size 136 与 static_assert 一致，也与历史 l625 注释「真类 classSize 136」一致"
+ },
+ "verdict": "PASS（纯诊断，无功能变化）。否证了三个候选：① metaclass 没注册（已在表里）② classSize 不匹配（136==136==历史真类）③ 伪造类初始化没跑（已跑，super=IOService 正确）。同时确认 =1 安全：无 kext 加载、无 panic、系统正常回 TWRP。⛔ 后续校正（HANDOVER §7q）：原判『iOS 侧没走发现路径』不成立——l699 已有 backboardd 的活连接，DSC 反汇编证明 MTLRegisterDevices 无条件调用且只要求 MetalPluginName/MetalPluginClassName。本轮结论只保留『类/尺寸/初始化/属性均 OK』。",
+ "why_it_matters": "这一步把 '改头文件尺寸 / 修初始化 / 加载真 IOGPUFamily kext' 三条候选全部排除；也再次说明 nabu-gpu-abi=2 没必要且不安全。⛔ 原写『剩下唯一正路=让 iOS 侧 Metal 发现承认这个 service』已被 §7q 否证：发现入口无条件、必需属性我们都有，且 backboardd 连接实际建立。下一步是查连接之后到首帧的断点。",
+ "next": "⛔ 原 next（查 iOS 侧 provider 匹配隐含条件）已完成且结论为『无隐含条件』：MTLRegisterDevices 无条件调用、只查 MetalPluginName/MetalPluginClassName。改为按 HANDOVER §7q 纯离线查连接建立之后到 CAContext/首帧的断点。"
+}

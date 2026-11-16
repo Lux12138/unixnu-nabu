@@ -1,0 +1,11 @@
+{
+ "ts": "2026-11-05T00:16:13",
+ "pkg": "merge-legacy-l572",
+ "payload_sha": "8f3419984e75e333bc9521333152b9e55767672e2f406f8369659d313e8df8f3",
+ "tag": "l572s8",
+ "ok": false,
+ "error": "stale ring: implied boot 1793808829s vs flash 1793808497s (delta 332s) - the log line belongs to another boot",
+ "t_s": null,
+ "state_line": null,
+ "fields": {}
+}

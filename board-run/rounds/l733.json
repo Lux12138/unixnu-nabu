@@ -1,0 +1,31 @@
+{
+ "tag": "l733",
+ "when": "2026-11-12T05:17:18",
+ "kind": "ONE-SHOT TEMPORARY CORRECT-LOW-BRANCH WIMG ROUND; MECHANISM-NEGATIVE / SUBJECTIVE-NO-GO",
+ "question": "把 NativeAdrenoQueryPageCacheMode 低位 switch 中 WCOMB=0x6 的比较改为 VM_WIMG_IO=0x7，能否让 GPU handoff 通过 P3 no-copy target import 并出现 P4/PF>0 / ncpy<xfer？",
+ "kernel": "55e0f286",
+ "payload": "0156add9",
+ "adt": "78a6f7e9",
+ "gpu_addon": "950a3968",
+ "trust_cache": "a4a6bae6",
+ "boot": "ead4b531",
+ "args": "700/39 — 与 l730 逐字节相同；added=[] dropped=[]",
+ "authorization": "用户授权 7×24 自动推进并明确『开始这项工程』；一次性临时轮，用完回滚，不进默认 args；零新增打印/探针、零重编、零安全放宽、不碰 boot_a。",
+ "package": {
+  "kernel_diff": "relative hold/l730 exactly one byte @0xa50f35=0x19->0x1d; instruction cmp w8,#0x6 -> cmp w8,#0x7 at file offset 0xa50f34",
+  "five_others": "gpu-addon.bin/kernel.macho.adt/owner-trust.bundle/boot-merge-r3.img unchanged; payload FAT replaced only KERNEL~1.MAC",
+  "gates": {"audit_bootability": "WSL OK 0fail/0warn", "audit_dual": "10/10 match (state/audit-l733.json)", "audit_args": "OK 700/39 added=[] dropped=[]", "precheck": "state/precheck.json PASS", "precheck_check": "PASS", "board_report": "state/board-report-l733.md six sections PASS", "guard_no_boot_flash": "PASS"}
+ },
+ "result": {
+  "boot_controls": "CDC args pet=600 arm=0; skip-read ok=5/5; sheng-mig sentinel/prefs/readback; scanout hand-off online gop=9c000000/fa0000 1600x2560 stride=1900; NABU TOUCH backboardd client present",
+  "wdt": "PON=0x80041 auto TWRP at 05:23:26; no panic / APFS unencrypted / buf_bread; CDC max t=6,437,803,796 ticks = 335.3 s; seq0 and seq1 both triggered",
+  "diagnostics": "CDC logs/l733-cdc-merged.bin 1,103,464 B sha8 4c69b6b3; seq0 38,502,400 B sha8 50824e19 / 292 files; seq1 38,502,400 B sha8 294f849f / 401 files; seq1 screen.bgrx sha8 d9d0a293, 1024000 pixels, 53853 colors, PNG logs/l733-seq1-screen.png is a complete iPadOS lockscreen",
+  "p3": "P3 e0 x20; P4/PF/PX all 0; no-copy buffer refused x11; import_stage=17 fail_pa=0 x11; later stage=19 x9; host import reason=10 status=c4641cbd. The target GOP import was not fixed; later ordinary surface imports reached stage 19 as in l730.",
+  "frames": "16 printed frames rows, last xfer=3 nswap=3 nsurf=2 sbytes=16384000 nok=3 ncpy=3 nret=3 fingers=0; ncpy==xfer==nret remains true; no ncpy<xfer; no GPU handoff takeover",
+  "screen": "seq1 full iPadOS lockscreen preserved visually (Wednesday, 31 December / 4:04 / colorful wallpaper / Home indicator); l733 screen sha differs from l730 ff868216 because of wallpaper/time/frame state, not a white or black regression",
+  "safety": "device back in TWRP f91fa664; boot_a untouched; no panic/APFS/buf_bread; WDT auto recovery; double slots non-stale"
+ },
+ "verdict": "MECHANISM-NEGATIVE / SUBJECTIVE-NO-GO: correcting the reachable low-value switch branch restored the full l730-like lifespan, double diagnostic slots and lockscreen, but did not change P3/P4/PF or the CPU copy path. This proves a single WIMG compare constant is not enough; the failure is deeper in the NGP scanout descriptor / host-import capability path. One-shot package must not be kept; best verified package remains hold/l730. Stop guessing WIMG compare constants.",
+ "next": "Roll back cust to hold/l730 before any later boot, decode l733 seq1 os_log for exact SpringBoard handoff markers, and statically determine the exact pmap_cache_attributes()/WIMG/external buffer feature value from existing official channels. If no exact run-time value can be obtained without a new probe, move to a proper kernel NGP descriptor/WIMG source change or DPU display-SMMU route under the frozen engineering baseline; do not create another one-byte constant round.",
+ "rollback": "hold/l730 (best verified lockscreen/touch package); l732 and l733 are one-shot, not default args. Current cust contains l733 payload, so subsequent boot must explicitly flash cust from hold/l730 or an approved newer package and re-arm misc last."
+}

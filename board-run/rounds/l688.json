@@ -1,0 +1,22 @@
+{
+ "tag": "l688",
+ "when": "2026-11-07T05:46Z",
+ "kernel": "fbfdedaf",
+ "payload": "c1be7af1",
+ "args": "687/38",
+ "boot_at": "05:41:32",
+ "recovery_at": "05:46:51",
+ "seconds_to_recovery": 319,
+ "pon": "0x40001",
+ "nabulog": {"length": 20442, "total": 20442, "dropped": 0},
+ "display_lines": 0,
+ "last_line": "lockdown_mode: lockdown mode in nvram is",
+ "verdict": "REGRESSION, not a missing reading. The kernel stopped at IONVRAM/lockdown_mode having written only 20,442 B; it never reached the display driver, so no nabu-display or addon line exists.",
+ "delta_evidence": {
+  "l686_to_l687": ["___startup_EARLY_BOOT_entry_source_pthread_bootstrap_27->_23", "___startup_LOCKS_entry_lck_mtx_startup_init_8939->_8946", "zone_site_register +7", "build stamp 20:53:39->05:06:24"],
+  "l686_to_l688": "identical set plus the one addon format string",
+  "l687_to_l688": "only the verdict format string differs"
+ },
+ "conclusion": "Regression was introduced in 4d6e157c (l687), not by the l688 driver change. Points at the libpthread namespace fix (build-libpthread-kernel.py) altering EARLY_BOOT startup ordering.",
+ "next": "fc76 must restore a bootable kernel (575 s baseline) before adding verdict/driver fields; board is in recovery and l688 is retired"
+}

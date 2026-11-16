@@ -1,0 +1,22 @@
+{
+ "ts": "2026-11-04T13:16:07",
+ "pkg": "merge-legacy-l545",
+ "payload_sha": "9a43c5d79dedb7a674f81bfbbeb94634b8c4c907a5bf1a2ba2a00bddbc80538d",
+ "tag": "l545",
+ "ok": true,
+ "error": null,
+ "t_s": 366.6,
+ "state_line": "NABUSTATE1 pull=v13 ev=1 t=7038573065 tch=3/4 st9 e-5 id=ffffffffffff mrc=-19-19-19-19 mt4/2 lp=91/0 rx=11223344 din=0/0 pn=00000001/00000000/00000001/00000000/00000001/00000000 pwr=0 hids=0/-1/-1/0 hido=0 hidr=0 hidm=-1 hidself=0 sp=00000089,0000008d,0000008d,00000089 tvspi=fffffff8bb7dd000 spw=00000001,00000001,00000001,00000001 tvw=fffffff8bb7e1000 tvi=fffffff8bb7dc000 hz=9600000/9600000/0/2 e0 xfer=00000080,00000000,00000000,00000004/0/34 m00000002 sr=0000/0000 e0000 tri=ffff/0,ffff/0,ffff/0,ffff/0,0000/0,0000/0 cs0=0000000000000000 cs1=ffffffffffffffff cmd0=18000000,18000000 pad=cs00000000/miso00000000/00000000/00000000 rst=0/00000000 rt=0/00 cnthz=19200000 lk=505471/212 tier=1 poison=0 quarantine=0 rd=249798 fail=0 rt=1236726148 vb=1047802 vt=172176210 iv=0 ringtotal=290737 ringdrop=0 ringhead=290737 produced=290737 wdt=1 pet=300 imgf=0 apfs=-1 gpu=-1/0 shot=1 nsurf=2 nswap=5 n_ssp=0/0 ssp=off gopbase=000000009c000000 gop=1600x2560 row=6400 mapper=1 iomfb=1 nval=5 nrej=0 rsn=0 rw=0 nmap=0 nref=0 nunmap=0 nins=0 bootpa=000000009c000000 bootlen=16384000 bwh=1600x2560 ncop=5 nok=5 nbad=0 nlast=0 ncpy=5 ncpt=6898834 ncb=16384000 nret=5 nfr=5 wf=5 lk=0 lc=41011 bb=688,1096-915,1376 l0=ff000000:4054989 p0=ff000000:20158459 p1=ff020202:60 po=204918 fill=00000000 nfill=0 fbcon=4 fbr=80 blank_kept=0 irq=0/0 fr=0 ok=0 c=0 hid=0 hcs=0,0,0,0,0 hevt=0000 hres=-1,-1,-1,-1 gop_p0=ff000000:506864 gop_p1=ffffffff:4972 gop_po=165 gop_lc=5136 gop_bb=688,1096-915,1376 gop_h=20b6cdc5,20b6cdc5,387796760,5 splash=0/0/0/0",
+ "fields": {
+  "tch": "3/4",
+  "nval": "5",
+  "nswap": "5",
+  "gpu": "-1/0",
+  "gop_lc": "5136",
+  "gop_bb": "688,1096-915,1376",
+  "n_ssp": "0/0",
+  "hido": "0",
+  "hidr": "0",
+  "hidself": "0"
+ }
+}

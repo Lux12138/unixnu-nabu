@@ -1,0 +1,38 @@
+{
+ "tag": "l703",
+ "when": "2026-11-10T18:26:50",
+ "question": "4 字节修复后，stage-1 自测特征（256 selector probe / 10 ABI calls）是否消失？即 publish::requested() 是否已翻真、published 设备路径是否运行？",
+ "kernel": "fb3ce142",
+ "payload": "96da4263",
+ "adt": "78a6f7e9",
+ "gpu_addon": "950a3968 (同 l702)",
+ "trust_cache": "a4a6bae6 (同 l702)",
+ "boot": "ead4b531",
+ "args": "698/38 — 唯一变量：nabu-gpu-abi=1 换成 nabu-gpu-observe=1（内核已有官方 observation 通道，非新探针）",
+ "boot_at": "18:27:02",
+ "recovery_at": "18:32:17",
+ "cdc_file": "logs/l703-cdc.bin (356150 B, cdc-182729)",
+ "diag": {"full": "logs/l703-diag-full.bin (32385980 B, 325 records)", "tree": "logs/l703-diag-tree/", "oslog": "logs/l703-v1.jsonl (123403 行)", "screen": "logs/l703-diag-tree/screen.bgrx"},
+ "observation_4of4": {
+  "since_ready_us": 120001688,
+  "submitted_completed": "15/15",
+  "metal_opens": "2 busy=0 closes=1 foreign_opens=1 foreign_type=00000001",
+  "metal_calls": "738 selector=22 status=00000000 ext_entries=1560 ext_selector=0 ext_status=00000000",
+  "open_slots": ["0 backboardd 0x4147", "1 backboardd 0x4147", "2 backboardd 0x4148 foreign=1 (published 专有 hand-off)", "3 backboardd 0x0001 foreign=1"],
+  "methods": "1(Query) 2 / 2(BoAlloc) 46 / 3(BoMap) 50 / 8(GetStatus) 15 / 11(CreateQueue) 1 / 15(GetDeviceInfo) 2，全部 failures=0",
+  "frames": "xfer=8 nswap=8 nsurf=2 nok=8 ncpy=8 nret=8"
+ },
+ "comparison_vs_l699": "l699（旧 exe）ext_entries=266 / metal_calls=10 / 方法 1,2,3,5,9,13,15 / selector9 e00002c2 / 无 0x4148 = stage-1 自测；l703 的 0x4148 + CreateQueue + 15 次 submitted + BoAlloc/BoMap 46/50 = published deviceForPort/scanout 路径已运行。",
+ "result": {
+  "screen": "与 l702 逐字节相同 sha ca18b728a7def68e，仍 iBoot Apple Logo",
+  "oslog": "123403 行；PUB/ST/CAContext/CALayer/CARenderServerStart/MTLDevice 全 0；CAEnableDeepFramebuffer:false (:3560)、No Default FB Surface (:66115)、nodef=16384000 (:67229) 与 l701/l702 相同",
+  "gpuacc": "published cls=AGXAccelerator props=5",
+  "panic": 0,
+  "unencrypted_panic": 0,
+  "buf_bread_err16": 0
+ },
+ "verdict": "DECISIVE（回答了本轮唯一问题）：4 字节修复确实让 publish::requested() 生效，stage-1 自测消失，published GPU 设备与 0x4148 scanout 连接活跃、738 次 core dispatch / 15 次提交全成功。但屏未换内容 => 断点已后移到「设备产出 -> 显示驱动取帧」。子 Agent 定点查到 NativeMetalBridgePhase.h:85 注释：内核只在 sheng-fb-gpu=1 时 offer 帧给 scanout，而 l703 args 无此开关、os_log 无 PF/PX => l704 测该开关。",
+ "gates": {"audit_bootability": "OK 0fail/0warn (base l702)", "audit_dual": "7/7 equal", "audit_args": "added nabu-gpu-observe=1 / dropped nabu-gpu-abi=1 / 698<=700", "precheck": "OK"},
+ "rollback": "hold/l700 / hold/l702",
+ "device_state": "TWRP f91fa664，boot_a 未碰"
+}

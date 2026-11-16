@@ -1,0 +1,11 @@
+{
+ "ts": "2026-11-04T04:12:19",
+ "pkg": "l518-yi11",
+ "payload_sha": "22f95d0dfeb8cd8c79165688e7b49770820dbab845940ae5a4421b85b937b68e",
+ "tag": "loop-test",
+ "ok": false,
+ "error": "no round (board never left recovery)",
+ "t_s": null,
+ "state_line": null,
+ "fields": {}
+}

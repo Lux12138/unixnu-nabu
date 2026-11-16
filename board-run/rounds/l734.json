@@ -1,0 +1,30 @@
+{
+ "tag": "l734",
+ "when": "2026-11-12T06:09:35",
+ "kind": "ONE-SHOT OFFICIAL-FIELD DIAGNOSTIC ROUND; DECISIVE-POSITIVE DIAGNOSIS / DISPLAY-DEGRADED",
+ "question": "复用板上已有 import_stage/fail_pa/fail_offset 字段，把 stage17 后 WIMG Unknown 与 IONewData 失败分为 stage20/21，能否一次判定 P3 的 exact 内核原因？",
+ "kernel": "6686588b",
+ "payload": "7e51fdb3",
+ "adt": "78a6f7e9",
+ "gpu_addon": "950a3968",
+ "trust_cache": "a4a6bae6",
+ "boot": "ead4b531",
+ "args": "700/39 — 与 l730 逐字节相同；added=[] dropped=[]",
+ "authorization": "用户授权 7×24 自动推进且明确『没有我的授权不允许停下来』；一次性诊断轮，用完回滚，不进默认 args；零新增打印/探针、零重编、零安全放宽、不碰 boot_a。",
+ "package": {
+  "kernel_diff": "relative hold/l730 exactly 33 bytes in 9 instructions at @0xa56418 and @0xa564e8; stage21 for IONewData failure, stage20 for WIMG Unknown with fail_pa/fail_offset, existing failed tail preserved",
+  "five_others": "gpu-addon.bin/kernel.macho.adt/owner-trust.bundle/boot-merge-r3.img unchanged; payload FAT replaced only KERNEL~1.MAC",
+  "gates": {"audit_bootability": "WSL OK 0fail/0warn", "audit_dual": "10/10", "audit_args": "OK 700/39 added=[] dropped=[]", "precheck": "PASS", "precheck_check": "PASS", "board_report": "six sections PASS", "guard_no_boot_flash": "PASS"}
+ },
+ "result": {
+  "exact_diagnosis": "import_stage=21 x18; import_stage=20 x0; import_stage=19 x0; import_stage=18 x0; fail_pa=0 in all target failures. Therefore the exact kernel failure is IONewData(NativeAdrenoPhysicalSpan, span_capacity) returning NULL / kIOReturnNoMemory, not WIMG Unknown and not an invalid physical segment.",
+  "root_cause": "firmware_physical=0; span_capacity=bytes/4096=4000 for GOP bytes=0xfa0000; sizeof(Span)=32 => 128000 B > arm64 KHEAP_MAX_SIZE=32 KiB; Mesa folds any BoImport kr into VK_ERROR_INVALID_EXTERNAL_HANDLE c4641cbd.",
+  "controls": "pet=600 arm=0; PON=0x80041 auto TWRP; no panic/APFS/buf_bread; CDC 930457 B sha8 24066a78, max t=307.9 s; seq0 and seq1 both pulled 38502400 B",
+  "p3": "P3 e0 x18, P4/PF/PX=0, host import reason=10 status=c4641cbd; no ncpy<xfer",
+  "display_degradation": "last frames xfer=5 ncpy=5 nret=5; seq1 screen.bgrx sha8 1d692f17 is 800x1280 all zero (pure black). Hence this diagnostic patch is not a performance fix and must not be retained.",
+  "safety": "device back in TWRP f91fa664; boot_a untouched; auto recovery via WDT"
+ },
+ "verdict": "DECISIVE-POSITIVE DIAGNOSIS / DISPLAY-DEGRADED: l734 proves P3's exact kernel branch is IONewData allocation failure for the 16 MiB GOP span array. It closes the WIMG hypothesis and makes a two-pass/compact span-capacity or proper kernel rebuild the next real fix. One-shot diagnostic only; best verified package remains hold/l730.",
+ "next": "Do not keep l734. Use the frozen l730 engineering baseline for a controlled rebuild of NativeAdrenoMemory::importTask() with exact merged-span capacity (or a safe two-pass scan), preserving per-page physical/WIMG checks. l735's one-byte capacity shrink was attempted next and was negative.",
+ "rollback": "hold/l730; cust and misc were restored immediately after this round and re-verified byte-for-byte."
+}

@@ -1,0 +1,31 @@
+{
+ "tag": "l732",
+ "when": "2026-11-12T05:07:09",
+ "kind": "ONE-SHOT TEMPORARY WIMG COMPARE ROUND; DECISIVE-NEGATIVE / WRONG-BRANCH PATCH",
+ "question": "把 NativeAdrenoQueryPageCacheMode 的 VM_WIMG_RT=0x17 比较临时改为 VM_WIMG_IO=0x7，能否让 GPU handoff 通过 P3 no-copy target import 并出现 P4/PF>0 / ncpy<xfer？",
+ "kernel": "766b7504",
+ "payload": "0ab2f9dc",
+ "adt": "78a6f7e9",
+ "gpu_addon": "950a3968",
+ "trust_cache": "a4a6bae6",
+ "boot": "ead4b531",
+ "args": "700/39 — 与 l730 逐字节相同；added=[] dropped=[]",
+ "authorization": "用户授权 7×24 自动推进并明确『开始这项工程』；一次性临时轮，用完回滚，不进默认 args；零新增打印/探针、零重编、零安全放宽、不碰 boot_a。",
+ "package": {
+  "kernel_diff": "relative hold/l730 exactly one byte @0xa50ef9=0x5d->0x1d; instruction cmp w8,#0x17 -> cmp w8,#0x7 at file offset 0xa50ef8",
+  "five_others": "gpu-addon.bin/kernel.macho.adt/owner-trust.bundle/boot-merge-r3.img unchanged; payload FAT replaced only KERNEL~1.MAC",
+  "gates": {"audit_bootability": "WSL OK 0fail/0warn", "audit_dual": "10/10 match (state/audit-l732.json)", "audit_args": "OK 700/39 added=[] dropped=[]", "precheck": "state/precheck.json PASS", "precheck_check": "PASS", "board_report": "state/board-report-l732.md six sections PASS", "guard_no_boot_flash": "PASS"},
+  "payload_fat_fix": "first mcopy -D o wrote only KERNEL~1.MAC and dropped the long name; rebuilt by deleting the directory entry and copying ::/.../kernel.macho. Re-audit PASS."
+ },
+ "result": {
+  "boot_controls": "CDC args pet=600 arm=0; skip-read ok=5/5 full=5/5 sz_eq=5/5 eq=5/5 gset=5/5; sheng-mig sentinel=0 prefs=0 err=0 / readback rc=0 fsz=0; scanout hand-off online gop=9c000000/fa0000 1600x2560 stride=1900",
+  "wdt": "PON=0x80041 auto TWRP at 05:12:18; no panic / APFS unencrypted / buf_bread; recovery captured at ~297.3 s wall. CDC max t=5,278,567,884 ticks = 274.9 s.",
+  "diagnostics": "CDC logs/l732-cdc-merged.bin 771,108 B sha8 cc056d26; seq0 base 124307451 pulled 38,502,400 B sha8 960176a2, 267 records; seq1 absent; screen.bgrx sha8 112b94b6 is 800x1280 all 0xff000000 (pure black), PNG logs/l732-seq0-screen.png",
+  "p3": "P3 e0 repeated; no P4, no PF, no PX; no-copy buffer refused HostMemory/NotRepresentable; import_stage=17 fail_pa=0; host import reason=10 status=c4641cbd; all identical in shape to l730",
+  "frames": "nabu-display: frames xfer=0 nswap=0 nsurf=0 sbytes=0 nok=0 ncpy=0 nret=0 fingers=0 in every printed row; NABU TOUCH lines present but no frame transfers",
+  "safety": "device back in TWRP f91fa664; boot_a untouched; no panic/APFS/buf_bread; auto recovery via WDT"
+ },
+ "verdict": "DECISIVE-NEGATIVE / WRONG-BRANCH PATCH. The single-byte compare change did not alter P3, did not register the GPU client, and did not produce P4/PF or ncpy<xfer. It also regressed the round to pure black / xfer=0 / seq0-only at ~275 s. Static post-mortem found the exact reason: the board switch first tests w8<=0xa and handles low WIMG values in a separate branch; VM_WIMG_IO=0x7 never reaches the patched #0x17 comparison. Therefore this round disproves the 'change high-branch comparison' implementation, not the underlying VM_WIMG_IO hypothesis. One-shot package must not be kept; best verified package remains hold/l730.",
+ "next": "If continuing immediately, construct l733 from hold/l730 by changing the low-branch WCOMB compare #0x6 -> #0x7 instead, which is reachable for w8=0x7 and returns NormalUncached=2; preserve all gates and one-shot rollback. Otherwise preserve the frozen engineering baseline and treat P3 as requiring a proper kernel NGP descriptor/WIMG source change before any further board round.",
+ "rollback": "hold/l730 (best verified lockscreen/touch package); l732 one-shot must not enter default args. Current cust partition contains l732 payload, so any later boot must explicitly flash cust from the chosen package and re-arm misc last."
+}

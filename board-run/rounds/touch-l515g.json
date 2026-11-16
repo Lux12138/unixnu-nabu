@@ -1,0 +1,20 @@
+{
+ "ts": "2026-11-04T06:13:34",
+ "pkg": "touch-l515g",
+ "payload_sha": "4be30906ba2afc10a965fc87eacd01028373f7c410d2d1ff8ac307f9f84ac1f8",
+ "tag": "touch-l515g",
+ "ok": true,
+ "error": null,
+ "t_s": 365.2,
+ "state_line": "NABUSTATE1 pull=v13 ev=1 t=7011464209 tch=2/3 st7 e-19 id=ffffffffffff mrc=-19-19-19-19 mt4/2 lp=91/0 rx=11223344 din=0/0 pn=00000281/00000003/00000001/00000000/00000281/00000003 pwr=2 hids=0/-1/-1/0 hido=0 hidr=0 hidm=-1 hidself=0 sp=00000089,0000008d,0000008d,00000089 tvspi=fffffff9ac37a000 spw=00000001,00000001,00000001,00000001 tvw=fffffff9ac37e000 tvi=fffffff9ac379000 hz=9600000/9600000/0/2 e0 xfer=00000080,00000000,00000000,00000004/0/3 m00000002 sr=0000/0000 e0000 tri=ffff/0,ffff/0,ffff/0,ffff/0,0000/0,0000/0 cs0=0000000000000000 cs1=ffff030000000000 cmd0=18000000,18000004 pad=cs00000000/miso00000000/00000003/00000000 rst=0/00000000 rt=0/00 cnthz=19200000 lk=2124968/1023 tier=1 poison=0 quarantine=0 rd=213018 fail=47 rt=2077204849 vb=994166 vt=185080122 iv=0 ringtotal=325795 ringdrop=0 ringhead=325795 produced=325795 wdt=1 pet=300 imgf=0 apfs=-1 gpu=-1 nsurf=2 nswap=5 n_ssp=0/0 ssp=off gopbase=000000009c000000 gop=1600x2560 row=6400 mapper=1 iomfb=1 nval=5 nrej=0 rsn=0 rw=0 nmap=0 nref=0 nunmap=0 nins=0 bootpa=000000009c000000 bootlen=16384000 bwh=1600x2560 ncop=5 nok=5 nbad=0 nlast=0 ncpy=5 ncpt=22106540 nret=5 nfr=5 wf=5 lk=0 lc=41011 bb=688,1096-915,1376 l0=ff000000:4054989 p0=ff000000:20094641 p1=ff020202:60 po=204955 fill=00000000 nfill=0 fbcon=1 fbr=80 blank_kept=0 irq=0/0 fr=0 ok=0 c=0 hid=0 hcs=0,0,0,0,0 hevt=0000 hres=-1,-1,-1,-1",
+ "fields": {
+  "tch": "2/3",
+  "nval": "5",
+  "nswap": "5",
+  "gpu": "-1",
+  "n_ssp": "0/0",
+  "hido": "0",
+  "hidr": "0",
+  "hidself": "0"
+ }
+}

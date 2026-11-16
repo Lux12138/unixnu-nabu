@@ -1,0 +1,19 @@
+{
+ "tag": "l695r",
+ "when": "2026-11-07T13:42Z",
+ "kernel": "1f82e4a3 (claimed l695p + 0017 diag)",
+ "payload": "7ba98abc",
+ "adt": "78a6f7e9", "gpu_addon": "dcd25289", "trust_cache": "b1bd85cc", "boot": "ead4b531",
+ "args": "674/37 (tag l695r)",
+ "boot_at": "13:42:31",
+ "recovery_at": "13:43:51",
+ "seconds_to_recovery": 80,
+ "cdc_bytes": 19664,
+ "panic": "panic(cpu 0 caller 0xfffffff0056d1f98): \"unencrypted data volume is not allowed\" @apfs_vfsops.c:2276",
+ "panic_point": "disk5s1 mounting volume Data -> handle_mount -> panic; nabu-addon: never printed (native_gpu_addon_install runs at launchd exec, later)",
+ "owner_lines": "3, stage=6 error=0 root=1 cache=1, same as l695p",
+ "verdict": "REGRESSION in the kernel, not in 0017. The diagnostic line never executed, so its printf/vnode_lookup cannot be the cause. Same args (-apfs_shared_datavolume) mounted this same Data volume fine on l695p's kernel efcb4c34.",
+ "kernel_diff_evidence": "l695r vs l695p: identical size (125,628,416) and symbol count (53,412), but __LINE__-derived symbols shifted across unrelated files (lck_mtx_startup_init_8939->8959, zone_site_register_7661->7674, source_pthread_bootstrap_27->23) => built from a different source tree / patch set, not 'l695p + one line'.",
+ "device_state": "fell back to TWRP as designed (misc armed last); boot_a untouched",
+ "next": "fc76 rebuilds from efcb4c34 + only 0017, with an nm diff proving no unrelated line drift; then re-run"
+}

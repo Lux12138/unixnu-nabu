@@ -1,0 +1,29 @@
+{
+ "tag": "l725",
+ "when": "2026-11-11T22:12:01",
+ "kind": "ONE-SHOT TEMPORARY DIAGNOSTIC-WINDOW ROUND (user-authorized automatic progression); DECISIVE-NEGATIVE / EARLY-RESET",
+ "question": "把第二诊断槽 diagAt1 从 300 s 后移到 400 s，能否取得覆盖 287–400 s 的 os_log 来判读 LaunchServicesMigrator 是否后来完成/交还？",
+ "kernel": "b49bd30b",
+ "payload": "7a6faeb6",
+ "adt": "78a6f7e9",
+ "gpu_addon": "950a3968",
+ "trust_cache": "a4a6bae6",
+ "boot": "ead4b531",
+ "args": "700/39 — 与 l723 逐字节相同；added=[] dropped=[]",
+ "boot_at": "22:12:12",
+ "recovery_at": "22:17:25",
+ "cdc_file": "logs/l725-cdc.bin (980966 B, sha8 f962b5e4; 源自 logs/cdc-221239.bin)",
+ "diag": {"seq0": "base=124307451 bytes=27937520 wrote=27938816 files=261 errors=0", "seq1": "0 命中"},
+ "authorization": "用户授权 7×24 自动推进到能开机/临时数据补丁；一次性临时轮、用完回滚、不进默认 args；零新增打印/探针、零重编、零安全放宽、不碰 boot_a。",
+ "result": {
+  "patch": "相对 l723 仅 kernel @0xa33690 一条同长 ARM64 指令 mov w8,#300 88258052 -> mov w8,#400 88328052（实际 1 字节变化）；pet600、diagAt0=220、installd33、Keychains uid64、APFS nop 全保留；全套门禁与六问板报 PASS",
+  "wdt": "CDC 回显 pet=600、data tree attr=49 attrfail=0；22:12:12 boot、22:17:25 自动回 TWRP f91fa664，约 313 s wall；内核 tick 只到 280.5 s，frames 11，无 panic / APFS unencrypted / buf_bread err16",
+  "diag_slots": "真实 223.3 s 后 NABUDIAG1/2 seq=0 正常导出（27,937,520 B、261 files）；NABUDIAG seq=1 全程 0。第二槽 400 s 阈值前板子已停笔，未触发",
+  "interpretation": "l723 的 698 s 长窗口依赖 diagAt1≈300 的第二份约 31 MB 导出 I/O 续命；l724 推到 500 s、l725 推到 400 s 都丢失该 I/O，分别 337.2 / 280.5 s 停笔。300 s 是当前配置的临界续命点，不是 WDT/属主/keychain 修复失效。"
+ },
+ "verdict": "DECISIVE-NEGATIVE / EARLY-RESET：diagAt1=400 同长补丁仍没取得第二槽；300→400 与 300→500 都证明第二诊断槽必须留在约 300 s 才能续命。l723 的 diagAt0=220 + diagAt1=300 仍是唯一稳定双槽且活到 698 s 的基线。停止诊断时间闸后移方向；下一步改查 l723 第二槽 tracev3 为何只到 287.3 s，或用已有 nabu-oslog-dump-at/RAM ring 补 287 s 后日志。",
+ "next": "保留 l723 为最佳启动/诊断基线；不再改 diagAt1/WDT/属主。纯离线核 l723 seq1 tracev3 快照边界、nabu-oslog-dump-at 与 NABUOSLOG1 机制；若能直接补 287–500 s 日志则出 l726，否则明确收敛。",
+ "gates": {"audit_bootability": "OK 0fail/0warn (base l723)", "audit_dual": "7/7 equal (audit-l725.json)", "audit_args": "700/39 -> 700/39, added=[] dropped=[]", "precheck": "OK (state/precheck.json)", "board_report": "state/board-report-l725.md 六问齐全", "guard_no_boot_flash": "OK", "static_check": "PASS: only seq0/1, official no skip-migration switch, diagAt1=400 recommended by static agent"},
+ "rollback": "hold/l723 (最佳启动/诊断基线) / hold/l722 / hold/l721 / hold/l720 / hold/l719 / hold/l718 / hold/l714 / hold/l700；本包一次性，不进默认 args",
+ "device_state": "TWRP f91fa664，boot_a 未碰"
+}

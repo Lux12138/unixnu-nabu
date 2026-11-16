@@ -1,0 +1,22 @@
+{
+ "ts": "2026-11-04T20:51:45",
+ "pkg": "merge-legacy-l562",
+ "payload_sha": "6a752af1a30e49ebf77b7a8cb2a76cdf1464dc2b41efb93e205ada7aac0f9a87",
+ "tag": "l562r",
+ "ok": true,
+ "error": null,
+ "t_s": 154.8,
+ "state_line": "NABUSTATE1 pull=v13 ev=1 t=2972551942 tch=0/0 st0 e0 id=000000000000 mrc=0000 mt0/0 lp=0/0 rx=00000000 din=0/0 pn=00000000/00000000/00000000/00000000/00000000/00000000 pwr=0 hids=0/-1/-1/0 hido=0 hidr=0 hidm=-1 hidself=0 sp=00000000,00000000,00000000,00000000 tvspi=0000000000000000 spw=00000000,00000000,00000000,00000000 tvw=0000000000000000 tvi=0000000000000000 hz=0/0/0/0 e0 xfer=00000000,00000000,00000000,00000000/0/0 m00000000 sr=0000/0000 e0000 tri=0000/0,0000/0,0000/0,0000/0,0000/0,0000/0 cs0=0000000000000000 cs1=0000000000000000 cmd0=00000000,00000000 pad=cs00000000/miso00000000/00000000/00000000 rst=0/00000000 rt=0/00 cnthz=19200000 lk=1285949/612 tier=1 poison=0 quarantine=0 rd=135135 fail=5 rt=1178856129 vb=876367 vt=159959847 iv=0 ringtotal=136461 ringdrop=0 ringhead=136461 produced=136461 wdt=1 pet=300 imgf=0 apfs=-1 gpu=-1/0 shot=1 nsurf=0 nswap=0 n_ssp=0/0 ssp=off gopbase=000000009c000000 gop=1600x2560 row=6400 mapper=1 iomfb=1 nval=0 nrej=0 rsn=0 rw=0 nmap=0 nref=0 nunmap=0 nins=0 bootpa=000000009c000000 bootlen=16384000 bwh=1600x2560 ncop=0 nok=0 nbad=0 nlast=0 ncpy=0 ncpt=0 ncb=0 nret=0 nfr=0 wf=0 lk=0 lc=0 bb=0,0-0,0 l0=00000000:0 p0=00000000:0 p1=00000000:0 po=0 fill=00000000 nfill=0 fbcon=4 fbr=80 blank_kept=0 irq=0/0 fr=0 ok=0 c=0 hid=0 hcs=0,0,0,0,0 hevt=0000 hres=-1,-1,-1,-1 gop_p0=ff000000:512000 gop_p1=00000000:0 gop_po=1 gop_lc=0 gop_bb=0,0-0,0 gop_h=9eefddc5,9eefddc5,387773958,0 splash=0/0/0/0",
+ "fields": {
+  "tch": "0/0",
+  "nval": "0",
+  "nswap": "0",
+  "gpu": "-1/0",
+  "gop_lc": "0",
+  "gop_bb": "0,0-0,0",
+  "n_ssp": "0/0",
+  "hido": "0",
+  "hidr": "0",
+  "hidself": "0"
+ }
+}

@@ -1,0 +1,40 @@
+{
+ "tag": "l730",
+ "when": "2026-11-12T01:05:00",
+ "kind": "ONE-SHOT TEMPORARY MIGRATION-COMPLETION ROUND (user-authorized automatic progression); DECISIVE-POSITIVE / LOCKSCREEN REACHED",
+ "question": "让 com.apple.migration CFPreferences 域保留 365 B 官方完成态 LastSystemVersion=21H461、不再被 sheng-mig=1 的 264 B 强制态覆盖，能否消除 lastBuildVersionPref 的 (null)，出现 Migration not necessary，进而完成通知与桌面交还链出现 Migration complete / finishedStartup / Dismissing overlay / screen owner is now，让屏离开 PUIProgressWindow？",
+ "kernel": "d3598dd6",
+ "payload": "3876e1a2",
+ "adt": "78a6f7e9",
+ "gpu_addon": "950a3968",
+ "trust_cache": "a4a6bae6",
+ "boot": "ead4b531",
+ "args": "700/39 — 与 l727/l723 逐字节相同；added=[] dropped=[]",
+ "boot_at": "00:55:20",
+ "recovery_at": "01:01:08 (CDC watcher done) / 01:02:27 (capture pull)",
+ "cdc_file": "logs/l730-cdc-merged.bin (1,107,308 B, sha8 d6e1de0a; 单段 cdc-005548.bin 0–336.8 s)",
+ "diag": {
+  "seq0": "base=124307451 bytes=30150073 wrote=30150656 files=289 skipped=1 errors=0",
+  "seq1": "base=124340219 bytes=38072476 wrote=38076416 files=397 skipped=1 errors=0",
+  "seq0_full": "logs/l730-diag-seq0-full.bin (38,502,400 B, sha8 4414ebee)",
+  "seq1_full": "logs/l730-diag-seq1-full.bin (38,502,400 B, sha8 d59e5a38)",
+  "seq0_oslog": "logs/l730-seq0-v1.jsonl (92,877,040 B, sha8 d589a8c2; 93,862 行, 0 解析失败, 真实 38.5–208.8 s)",
+  "seq1_oslog": "logs/l730-seq1-v1.jsonl (211,967,418 B, sha8 8ef79a35; 218,847 行, 0 解析失败, 真实 38.5–292.8 s; archive 含两份 Special/*.tracev3 与 382 uuidtext)",
+  "screen_png": "logs/l730-seq1-screen.png (800x1280, sha8 9fcdd7ff)"
+ },
+ "authorization": "用户授权 7×24 自动推进到能开机/临时数据补丁；一次性临时轮、用完回滚、不进默认 args；零新增打印/探针、零重编、零安全放宽、不碰 boot_a。",
+ "result": {
+  "patch": "相对 l727 052e1ec5 仅 67 文件字节：在 __TEXT 全零 padding @0x175b 放 66 B 等长无害路径 com.apple.migratiox.plist\\0；sheng-mig 强制态写入 ADRP x0 @0x7758e0 e0ccff90→60c4ff90（page 0xfffffff007115000→0xfffffff007005000），ADD #0x75b 不变。setup_skip[4] 完成态写入/readback 的 ADRP、数组指针与旧 com.apple.migration.plist C 串全不动。相对 l727 其余五文件、args 700/39、APFS nop、pet=600、diagAt0=220、diagAt1=300、migratx、norceMigrationOnNextReboot 全保留；全套门禁与六问板报 PASS",
+  "mechanism_positive": "CDC 启动回显 NativeUfs: args hang=0 panic=2 autolog=0 ... pet=600 arm=0；nabu: skip-setup w=m ... com.apple.migration.plist err=0；nabu: skip-read i=4 rc=0 sz=365 gset=1 want=365 n=365 eq=1 keys=LastSystemVersion,DMUserDataDisposition,SyntheticDidUpgrade,buildVersion；nabu: skip-read ok=5/5 full=5/5 sz_eq=5/5 eq=5/5 gset=5/5；sheng-mig: sentinel=0 prefs=0 err=0 / readback rc=0 fsz=0。365 B 官方完成态不再被 264 B 强制态覆盖，且 sheng-mig=1 仍写哨兵/强制态",
+  "wdt": "pet=600 arm=0、attr=49 attrfail=0、内核 t= 到 336.8 s；01:01:08 CDC watcher 收尾、01:02:27 设备 TWRP f91fa664；PON=0x80041 内核自复位，无 panic: / panic( / APFS unencrypted / buf_bread；无需人工长按。BITE / WDT.CFG / Mu / NABU_WDT_BITE_MS / arm-delay=0 全未动",
+  "diag_slots": "seq0 约 220 s 后触发（30,150,073 B/289 files），seq1 约 300 s 后触发（38,072,476 B/397 files），两个 SHEXR001/M2VCACH1 头不同、base 相差 32768 个 4 KiB 块、均非 stale。按 9400×4 KiB 拉取，完整覆盖 seq1 的 38,076,416 B",
+  "oslog": "seq0 93,862 行、真实 38.5–208.8 s；seq1 218,847 行、真实 38.5–292.8 s；两槽 0 解析失败。System build version changed from (null) / Migration necessary / Migration sentinel present 全 0；System build version unchanged from 21H461. Migration not necessary. seq0 5 条、seq1 11 条。seq1 137.3 s Migration complete (if performed). (Elapsed time: 0.00 seconds)；229.5 s checkInAndWaitForDataMigration:YES 后 Telling \"com.apple.springboard\" that it can start immediately；233.0 s Migration completed, calling updateUsers / performing synchronize；234.8 s ICDServer Server Setup - 5. Migration completed；248.0 s systemShellDidFinishLaunching、updateOverlay: pid:27 explicitlyDismissed:NO finishedStartup:YES、Dismissing overlay: shell launched / didFinishFirstBoot 各 2 条。AXSpringBoardServer 23 条仍为 nfcd No such process，但不阻止锁屏；checkInAndWaitForDataMigration 2、Resume all uncompleted 1、No explicit screen owner 6、screen owner is now 0（交还后官方日志未用该格式）",
+  "screen": "seq0 screen sha 112b94b6b55a348f 是纯黑；seq1 screen.bgrx sha ff868216f7ade41b，1024000 非黑像素、全屏 bbox 0..799/0..1279、53856 colors。转换 logs/l730-seq1-screen.png 后人工核对为完整 iPadOS 锁屏：Wednesday, 31 December / 4:04 时钟、彩色系统壁纸、底部 Home 指示条、右上状态图标；不再是 PUIProgressWindow。CDC frames 最终 xfer=3 nswap=3 nsurf=2 ncpy=3 nret=3，显示链已把系统 UI 提交到屏",
+  "safety": "boot_a 未碰；上板仅 flash cust + 最后重 arm misc + fastboot boot；一次性临时包，不进默认 args；无 panic/APFS/buf_bread，自动回 TWRP。"
+ },
+ "verdict": "DECISIVE-POSITIVE / LOCKSCREEN REACHED：把 sheng-mig 强制态写离旧 com.apple.migration.plist、让 365 B 官方完成态保留在正确 CFPreferences 域，消除了 lastBuildVersionPref 的 (null)，触发 Migration not necessary，SpringBoard finishedStartup:YES 与 Dismissing overlay，并交还出真实 iPadOS 锁屏。最后的开机墙已被这套单变量数据补丁跨过。屏是锁屏而非已解锁桌面，AXSpringBoardServer 仍 No such process，但这是锁屏/辅助功能层细节，不再是 BootUI/PUIProgressWindow 卡住。WDT pet=600 与自动回 TWRP 仍正常。",
+ "next": "将 l730 作为新的最佳已验证包；按一次性边界明确回滚链但不默认覆盖 boot_a。下一步若继续，优先核 (1) 锁屏是否可交互/解锁到桌面，需用户侧确认或现有输入链；(2) AXSpringBoardServer 未注册是否影响锁屏功能；(3) 若用户要求持久开机，再讨论把这一等价补丁固化到编译侧/默认 args 的路线级动作，期间继续维持 boot_a 不碰。停止纯时间常数、迁移 plist 域猜测与重复上板。",
+ "gates": {"audit_bootability": "OK 0fail/0warn (base l727)", "audit_dual": "7/7 equal (audit-l730.json)", "audit_args": "700/39 -> 700/39, added=[] dropped=[]", "precheck": "OK (state/precheck.json)", "board_report": "state/board-report-l730.md 六问齐全", "guard_no_boot_flash": "OK", "static_official": "com.apple.datamigrator 0x100008ec4 lastBuildVersionPref / 0x10000a510 CFPreferencesAppSynchronize com.apple.migration / 0x1b764 Migration not necessary"},
+ "rollback": "hold/l727 (上一迁移断点实验包) / hold/l723 (旧稳定双槽基线) / hold/l726 / hold/l722 / hold/l721 / hold/l720 / hold/l719 / hold/l718 / hold/l714 / hold/l700；本包一次性，不进默认 args",
+ "device_state": "TWRP f91fa664，boot_a 未碰；PON=0x80041 内核自复位，无 panic / APFS unencrypted / buf_bread err16"
+}

@@ -1,0 +1,16 @@
+{
+ "tag": "l691",
+ "when": "2026-11-07T10:07Z",
+ "kernel": "efcb4c34",
+ "payload": "6c638549",
+ "adt": "c4f60231",
+ "args": "698/38 (+cs_enforcement_disable=1, tag l691)",
+ "boot_at": "10:02:02",
+ "recovery_at": "10:07:21",
+ "seconds_to_recovery": 319,
+ "pon": "0x40001",
+ "frames_xfer": 5,
+ "panic": "panic(cpu 0 caller 0xfffffff004ac9834): \"can't has cs_enforcement_disable\" @AppleMobileFileIntegrity.cpp:5261",
+ "verdict": "cs_enforcement_disable=1 is rejected by AMFI itself and panics at 319 s; l690 with the identical kernel ran 593 s. This boot-arg path is closed, not merely ineffective.",
+ "next": "kernel patch adding boot-arg mac-vnode-enforce (mac_base.c:223): set mac_vnode_enforce=0 only when explicitly passed 0; leave mac_proc_enforce untouched; default remains 1"
+}

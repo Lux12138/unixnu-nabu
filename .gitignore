@@ -1,0 +1,15 @@
+# build artifacts and board-side bulk data are not tracked
+*.o
+*.a
+*.dylib
+*.so
+*.bmp
+*.bgrx
+*.bin
+*.img
+*.macho
+*.jsonl
+*.tracev3
+__pycache__/
+*.pyc
+.cache/

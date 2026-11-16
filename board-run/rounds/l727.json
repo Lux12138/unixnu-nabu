@@ -1,0 +1,40 @@
+{
+ "tag": "l727",
+ "when": "2026-11-11T23:10:00",
+ "kind": "ONE-SHOT TEMPORARY MIGRATION-TRIGGER ROUND (user-authorized automatic progression); MIGRATION-BREAKPOINT-ADVANCED / STILL-NOT-DESKTOP",
+ "question": "在 l726 完成态 plist 修复基础上，让 sheng-mig=1 不再重建官方 /private/var/datamigrator/migrate 空哨兵，能否让 datamigrator 不再判定 Migration necessary，推进 migrator 完成、Migration complete / finishedStartup / Dismissing overlay / screen owner is now，让屏离开 PUIProgressWindow？",
+ "kernel": "052e1ec5",
+ "payload": "7960c99c",
+ "adt": "78a6f7e9",
+ "gpu_addon": "950a3968",
+ "trust_cache": "a4a6bae6",
+ "boot": "ead4b531",
+ "args": "700/39 — 与 l726/l723 逐字节相同；added=[] dropped=[]；sheng-mig=1 / sheng-smp=1 + nabu-wdt-arm-delay=0 / nabu-state-ring=10 全在",
+ "boot_at": "22:46:00 (CDC watcher segment cdc-224600.bin)",
+ "recovery_at": "22:53:54 (CDC watcher segment cdc-225101.bin done; adb recovery f91fa664 at 23:06)",
+ "cdc_file": "logs/l727-cdc-merged.bin (4,752,943 B, sha8 c4f24baa; 拼接 logs/cdc-224600.bin 1,537,190 B sha8 4d79a0c2 + logs/cdc-225101.bin 3,215,753 B sha8 2f44c711；旧 logs/l727-cdc.bin 只含第一段)",
+ "diag": {
+  "seq0": "base=124307451 bytes=29603996 wrote=29605888 files=279 skipped=1 errors=0",
+  "seq1": "base=124340219 bytes=35848404 wrote=35852288 files=358 skipped=1 errors=0",
+  "seq1_full": "logs/l727-diag-seq1-full.bin (36,044,800 B, sha8 a4dcd1c3)",
+  "seq1_tree": "logs/l727-seq1-diag-tree/ (361 files, 35,819,367 B)",
+  "oslog": "logs/l727-seq1-v1.jsonl (174,641,588 B, sha8 78534894; 172,201 行, 0 解析失败, 真实 38.2–296.1 s)；logs/l727-seq0-v1.jsonl (92,216,331 B, sha8 fb289573; 92,326 行, 0 解析失败, 真实 38.2–211.3 s)",
+  "oslog_v2": "logs/l727-seq1-v2.jsonl (189,202,566 B, sha8 66355604; 183,974 行, 0 解析失败, 真实 38.2–296.1 s；archive 含全部两份 Special/*.tracev3 与 343 uuidtext，SystemAppMigrator 3,306 条、completed migration 仍 3 条、交还四标志仍 0)"
+ },
+ "authorization": "用户授权 7×24 自动推进到能开机/临时数据补丁；一次性临时轮、用完回滚、不进默认 args；零新增打印/探针、零重编、零安全放宽、不碰 boot_a，WDT 延期只用已验证 pet-until 路径。",
+ "result": {
+  "patch": "相对 l726 仅 kernel @0x111b93 一个 ASCII 字节 0x65('e')→0x78('x')：/private/var/datamigrator/migrate → 等长 /private/var/datamigrator/migratx；相对 l723 仅两个字节（另含 @0x2289e forceMigrationOnNextReboot→norceMigrationOnNextReboot）。APFS nop 1f2003d5、pet600、diagAt0=220 / diagAt1=300、installd 33:33、Keychains uid64、args 700/39 全保留；全套门禁与六问板报 PASS",
+  "mechanism_positive": "CDC 早期 sheng-mig: sentinel=0 prefs=0 err=0 / readback rc=0 fsz=0（0 是成功码）；nabu: skip-read ok=5/5 full=5/5 sz_eq=5/5 eq=5/5 gset=5/5，nabu: skip-read i=4 读到 365 B 官方完成态 plist（LastSystemVersion / DMUserDataDisposition / SyntheticDidUpgrade / buildVersion）。l727 os_log 中 Migration sentinel present 0，证明官方空哨兵字符串不再是本轮触发源；但 29 条 System build version changed from (null) to 21H461. Migration necessary. 说明 datamigrator 另从『上一版 build = null』独立判定迁移必要",
+  "wdt": "pet=600、arm=0、attr=49 attrfail=0；两段 CDC 拼接后内核 t= 到 489.4 s，带时间戳行/ nabu: spawn 持续到 450–500 s 桶，NativeAdrenoProfile S 到 seq=768 / t≈479 s；22:53:54 watcher done 后 23:06 adb 已在 TWRP f91fa664，无需人工长按。无 panic: / panic( / APFS unencrypted / buf_bread。WDT 延期按历史记忆落在 kernel 同长 petSeconds 300→600（@0xa384f4 mov w8,#600）与 arm-delay=0，BITE / WDT.CFG / Mu / NABU_WDT_BITE_MS / hang=0 全未动",
+  "diag_slots": "diagAt0=220 与 diagAt1=300 均稳定触发：seq0 29,603,996 B/279 files，seq1 35,848,404 B/358 files；两个 SHEXR001/M2VCACH1 头不同、base 相差 32768 个 4 KiB 块，非 stale。300 s 第二槽的约 36 MB 导出 I/O 续命点保持",
+  "oslog": "172,201 行、真实 38.2–296.1 s；keychain-2.db 1（仅 path 打印）、Unable to create database / Failed to query keychain / Migration failed / MIInstallerErrorDomain 105/4 / installd home Fault / should be owned by uid 33 全 0。PUIProgressWindow setVisible:1 在 138.8 s；checkInAndWaitForDataMigration:YES 在 227.6 s；Resume all uncompleted migration processes 在 228.5 s；AXSpringBoardServer 31 条全为 nfcd[52] 的 No such process，127.1–293.8 s；updateOverlay: No explicit screen owner 3 条；Migration complete / Dismissing overlay / screen owner is now / finishedStartup 全 0",
+  "migration_breakpoint_advanced": "ContainerMigrator 139.3 s success 1；LaunchServicesMigrator 139.3 s begin、227.9 s completed migration ... success=1（88.572 s，l723/l726 无此完成行且分别 259.0/255.9 s 出 PRECAUTIONARY stackshot）；MSUDataMigrator 227.9 s begin、228.0 s completed migration ... success=1；SystemAppMigrator 228.1 s begin，260–300 s 桶出现 1,754 条 SystemAppMigrator / IXSPlaceholder / IXSDataPromise / installcoordination 相关行（“stall” 关键词来自 install/stalled 等选择器名，不是卡死证据）。273.9–274.0 s 有 29 条 MIInstallerErrorDomain Code=1288 “Intentional Cancel from SystemAppMigrator” cancellation，由 com.apple.migrationpluginwrapper pid245 对 SystemAppMigrator 的各系统 app coordinator 主动取消（SourceFileLine=1116、MISystemAppMigrator attemptToInstallSystemAppWithBundleID:desiredAppState:stagedAppOrPatchURL:isInstalled:），不是旧的 Code=105/4 staging 失败。296.1 s 的 seq1 快照仍无 SystemAppMigrator 完成行或交还四标志",
+  "screen": "seq1 screen sha f56d5c967d486f2f，11210 非黑、bbox 281..519/548..755、169 colors；与 l723 220fee39… / l726 862ba602… 同一 PUIProgressWindow 几何与颜色量级，只是动态进度内容不同，不是桌面。CDC frames 从 xfer=0 增到 xfer=495 / nswap=495 / ncpy=495 / nret=495，显示链路持续提交",
+  "key_residual_errors": "l727 有 43 条 SecDbMetadataKeyStore Unable to encrypt new metadata key to keybag: NSOSStatusErrorDomain Code=-25291 ks_crypt: e00002c7、40 条 Unable to load keychain data ... -25300、31 条 AXSpringBoardServer No such process 与 18 条 systemgroup.com.apple.logd_helper.FTABHarvest 噪声；旧 securityd keychain-2.db Code=14 / MobileActivation Failed to query keychain / Migration failed 归因链仍为 0。这些 l727 新观察项与 SystemAppMigrator 取消/交还是否因果相关，尚不能由当前快照证明"
+ },
+ "verdict": "MIGRATION-BREAKPOINT-ADVANCED / STILL-NOT-DESKTOP：失效官方空哨兵让迁移链从『LaunchServicesMigrator 卡住』推进到 LaunchServicesMigrator + MSUDataMigrator 双双完成、SystemAppMigrator 开始，但 300 s 诊断快照结束在 SystemAppMigrator 仍在跑且交还四标志全 0；屏仍 PUIProgressWindow。空哨兵是可观测断点源，但不是最后开机墙。系统继续活到 489.4 s、自动回 TWRP，WDT pet=600 / arm=0 正常，不是断电或早咬导致本轮阴性。残留待证：SystemAppMigrator 是否在 296–489 s 完成、MIInstallerErrorDomain Code=128 / keybag -25291 / AXSpringBoardServer 注册 / SpringBoard finishedStartup 谁是交还墙。",
+ "next": "优先把第二诊断槽保留在 300 s 续命 I/O，并通过已验证的 petSeconds=600→900/1200 与两个槽的合理次序取得 500–600 s 用户态 os_log 晚窗，直接判读 SystemAppMigrator 完成/交还；同时静态反查 System build version changed from (null) 读取的偏好键/域、MIInstallerErrorDomain Code=128 与 AXSpringBoardServer Mach service 注册条件。若晚窗仍无交还，再按证据收敛到 SpringBoard 初始化或 keybag 链，不再重复迁移 plist/哨兵/WDT 时间闸。",
+ "gates": {"audit_bootability": "OK 0fail/0warn (base l726)", "audit_dual": "7/7 equal (audit-l727.json)", "audit_args": "700/39 -> 700/39, added=[] dropped=[]", "precheck": "OK (state/precheck.json)", "board_report": "state/board-report-l727.md 六问齐全", "guard_no_boot_flash": "OK", "static_official": "21H461 datamigrator binary contains /private/var/datamigrator/migrate, Migration sentinel present. Migration necessary., Failed to remove migration sentinel, com.apple.migration.didComplete"},
+ "rollback": "hold/l723 (最佳启动/诊断基线) / hold/l722 / hold/l721 / hold/l720 / hold/l719 / hold/l718 / hold/l714 / hold/l700；本包一次性，不进默认 args",
+ "device_state": "TWRP f91fa664，boot_a 未碰；无 panic / APFS unencrypted / buf_bread err16"
+}

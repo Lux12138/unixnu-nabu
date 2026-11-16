@@ -1,0 +1,37 @@
+{
+ "tag": "l704",
+ "when": "2026-11-10T19:53:32",
+ "question": "给显示驱动开 sheng-fb-gpu=1 后，内核把帧 offer 给 published scanout 客户端，PF/PX 是否出现、屏是否换内容？",
+ "kernel": "fb3ce142",
+ "payload": "e7fe1c8a",
+ "adt": "78a6f7e9",
+ "gpu_addon": "950a3968 (同 l702/l703)",
+ "trust_cache": "a4a6bae6 (同 l702/l703)",
+ "boot": "ead4b531",
+ "args": "692/38 — 相对 l703 加 sheng-fb-gpu=1，去掉无消费者的 sheng-build-tag=l700；其余 37 token 同序同字节，nabu-gpu-observe=1 保留",
+ "boot_at": "19:53:44",
+ "recovery_at": "19:58:42",
+ "cdc_file": "logs/l704-cdc.bin (325658 B, cdc-195411)",
+ "diag": {"full": "logs/l704-diag-full.bin (29410413 B, 295 records)", "tree": "logs/l704-diag-tree/", "screen": "logs/l704-diag-tree/screen.bgrx"},
+ "handoff": "nabu: scanout hand-off online gop=9c000000/fa0000 1600x2560 stride=1900 —— 板上内核偏移 1617122 的 sheng-fb-gpu 消费者确实生效，显示驱动已切到 GPU hand-off 模式",
+ "observation_4of4": {
+  "since_ready_us": 120008676,
+  "submitted_completed": "12/12",
+  "metal_calls": "783 selector=22 status=00000000 ext_entries=1650 ext_selector=0 ext_status=00000000",
+  "open_slots": "同 l703：两条 0x4147 + 一条 0x4148 + 一条 type=1",
+  "methods": "1:2 / 2:46 / 3:50 / 8:12 / 11:1 / 15:2，全部 failures=0",
+  "frames": "xfer=5 nswap=5 nsurf=2 nok=5 ncpy=5 nret=5（l703 为 8）"
+ },
+ "result": {
+  "PF_PX_P0_P1_P2": 0,
+  "screen": "与 l702/l703 逐字节相同 sha ca18b728a7def68e，仍 iBoot Apple Logo 残留（10255 非黑 / 9964 纯白 / bbox 344..457,548..688）",
+  "panic": 0,
+  "unencrypted_panic": 0,
+  "buf_bread_err16": 0
+ },
+ "verdict": "DECISIVE-NEGATIVE for this switch：sheng-fb-gpu=1 打开了内核侧 hand-off（官方行实证），但 published scanout 的 PF/PX/P0..P4 一个没出现，published 设备计数与 l703 几乎同量级（12 vs 15 submitted、783 vs 738 calls、1650 vs 1560 ext_entries），frames 反而 5<8，屏零变化。历史 board-report-l695p.md:35 的 alioth『did not move the swap counter』在本 published 语境下重新成立。⇒ 内核 offer 帧不是最后一道墙；更可能是 GpuScanoutClient::open/serveOne 侧（0x4148 连接已开但 client.open 未成功、或合成层没有可渲染内容），现有日志无法区分。",
+ "next": "停止连续上板。若要继续，需要的是一次能读出 P0/P1/P2/PF/PX 或 CAContext/CALayer 的运行期官方通道；PUB/ST 与 GPU7 标记流在当前 shipped kernel 里无 CDC 输出（nabu_adreno_step1_compat.cpp:25-29 空 nabu_capture_append），属路线级新动作。当前停在已验证的 hold/l700 基线，设备 TWRP 安全。",
+ "gates": {"audit_bootability": "OK 0fail/0warn (base l703)", "audit_dual": "7/7 equal", "audit_args": "added sheng-fb-gpu=1 / dropped sheng-build-tag=l700 / 692<=700 / 关键开关全在", "precheck": "OK"},
+ "rollback": "hold/l700 (efcb4c34) / hold/l703",
+ "device_state": "TWRP f91fa664，boot_a 未碰"
+}

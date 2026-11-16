@@ -1,0 +1,29 @@
+{
+ "tag": "l685",
+ "when": "2026-11-07T05:05Z",
+ "kernel": "efcb4c34",
+ "payload": "79393ebb",
+ "adt": "29f2435d",
+ "addon": "bbdb4bc2",
+ "args": "689/38 (+sheng-gpu-addon=1, -sheng-vsync=60)",
+ "boot_at": "04:55:21",
+ "recovery_at": "05:04:53",
+ "seconds_to_recovery": 572,
+ "pon": "0x40001",
+ "display": {
+  "frames_xfer": 4,
+  "nswap": 4,
+  "nsurf": 2,
+  "state_line": "primary=1 mapper=1 pm=1 start=1 map=4 refuse=0"
+ },
+ "nabu_gpu_addon_line": "absent: l683 kernel predates that printf",
+ "amfi": [
+  "NativeAdrenoMetal.bundle/NativeAdrenoMetal is adhoc signed",
+  "unsuitable CT policy 0 for this platform/device, rejecting signature",
+  "code signature validation failed",
+  "same triple twice"
+ ],
+ "ring": {"total": 306555, "dropped": 0, "length": 98304},
+ "verdict": "bind-mount visible (AMFI checked the post-mount path), Metal discovery reached the bundle twice, but AMFI refused the adhoc signature on CT policy 0. frames did not grow (4 vs l684's 5).",
+ "next": "single-variable trust round: owner trust cache must contain bundle cdhash adbc5362... and register before AMFI; confirm make-owner-trust-bundle output is in the payload and loaded early"
+}

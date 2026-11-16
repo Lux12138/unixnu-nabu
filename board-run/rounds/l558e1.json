@@ -1,0 +1,11 @@
+{
+ "ts": "2026-11-04T19:59:43",
+ "pkg": "merge-legacy-l558c",
+ "payload_sha": "0de34f2d2ae4873984e95862e33cd495b4f250272ede6fc4f0ee58edf281e3f7",
+ "tag": "l558e1",
+ "ok": false,
+ "error": "no NABUSTATE1; serial tail: TIMEBASE cntfreq=19200000 cnt=779318595..779320412 cntdelta=1817 | FAULT global=0->0 syn=0 cb=400->0 syn=0 far=0 id2=5555 cba2r=1 | UIC pa=00000000 dl=00000000 net=00000000 tr=00000000 dme=00000000 | CMDCUR seq=6 dir=2 lba=288040 bytes=4096 fua=0 grace=0 pollgap=23 | GPT/read lba=288040 userdata=288040..769e7fa magic=00000000 00000000 manifest=1 | WINDOWS found=0 prepared=0 published=0 bytes=0 policies=0 verify=ffffffff | IO reads=0 failures=0 pubPhase=0 window=4294967295 | DEADLINE want=798518577 got=798518579 diff=2 mode=0 | UTRD 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 | CMDU 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 | RSPU 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 | @NativeUfs.cpp:2284 | Please go to https://pani",
+ "t_s": null,
+ "state_line": null,
+ "fields": {}
+}

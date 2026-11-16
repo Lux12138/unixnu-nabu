@@ -1,0 +1,176 @@
+{
+ "tag": "l738",
+ "when": "2026-11-12T11:10:00",
+ "kind": "SOURCE-REBUILD TWO-PASS IMPORTTASK EXACT SPAN CAPACITY ROUND",
+ "question": "importTask() 两遍扫描、精确 span 容量能否消除 IONewData(4000×32B) stage21 分配失败，让 Mesa host import 成功并进入 WAIT_SWAP/COMPLETE_SWAP，停止每帧 16 MB CPU blit？",
+ "kernel": "dcef3f10",
+ "payload": "d06bb9be",
+ "adt": "dcac3cfe",
+ "gpu_addon": "950a3968",
+ "trust_cache": "a4a6bae6",
+ "boot": "ead4b531",
+ "args": "700/39 — 与 l730 逐字节相同；added=[] dropped=[]",
+ "build_chain": {
+  "pipeline": "unixnu tree/build kernel/prelink/payload in same-path namespace (unshare -m + bind tree to /root/merge/out-v6/.../tree, --out /root/merge/l738-full/out)",
+  "source_change": "NativeAdrenoMemory.cpp importTask() two-pass: first pass counts merged spans + validates physical/WIMG, second pass allocates exact capacity and fills; firmware single-span fast path preserved; stage17/18/19 semantics unchanged. d266d1e9 -> d071fe10",
+  "compile": "archive-19 build-nabu-adreno-step1.py rc=0, 42 objects, libAdreno740.a 3,170,688 B",
+  "layout_verify": "18/18 ledger old_hex matched (GO_FOR_LEDGER); compile-command 19 out-v6 literals, 0 l738-full; 25 LC, no LC_CODE_SIGNATURE; segment VA/size match",
+  "ledger_replay": "204 bytes / 18 runs applied to b4a233d7 -> dcef3f10; 18/18 new_hex in place",
+  "semantics": "importTask disasm: 2x IOMalloc_internal (firmware/non-firmware paths), 3x QueryPageCacheMode (two-pass + firmware check), firmwareImportPhysical called once"
+ },
+ "package": {
+  "kernel": "dcef3f1007b812dbc6f6f875b2fc7bddd33fb2779ea4208476930eda40c79253",
+  "adt": "dcac3cfe6c777d74335f47426acc111c6c006bd1207ac1530305f07b72c2deda (211,568 B, with data ramdisk)",
+  "payload": "d06bb9be0bd656fb49254779122a07652332e66ff02767372a3adc0dbe18aaf3 (192 MiB)",
+  "trust": "a4a6bae6 (same as l730)",
+  "gpu_addon": "950a3968 (same as l730)",
+  "boot": "ead4b531 (same as l730)",
+  "data_ramdisk": "3cd3d0d3 (extracted from l730 payload)",
+  "unique_chip_id": "87f0ac79",
+  "gates": {
+   "audit_bootability": "OK 0fail/0warn",
+   "audit_args": "OK 700/39 added=[] dropped=[]",
+   "audit_dual": "7/7 match",
+   "precheck": "OK stamp written",
+   "precheck_check": "OK",
+   "board_report": "6 sections PASS",
+   "guard_no_boot_flash": "OK"
+  }
+ },
+ "authorization": "用户授权 7×24 自动推进；完整源码流水线 + 两遍扫描增量；一次性候选包、失败即回滚 hold/l730；零新增探针、不碰 boot_a、不进默认 args。",
+ "expected_result": {
+  "positive": "import_stage=19, no c4641cbd/P3, P4/PF>0, ncpy<xfer, lockscreen+touch, WDT pet=600 arm=0, 220/300 double slot, PON 0x80041 auto TWRP",
+  "negative_stage21": "still allocation failure -> check backing path or other IONewData limits",
+  "negative_stage18": "physical/WIMG first barrier -> use official diagnostic words",
+  "safety": "any panic/APFS/buf_bread/WDT anomaly/lockscreen loss -> immediate rollback to hold/l730"
+ },
+ "rollback": "NOT rolled back — positive result, device back in TWRP f91fa664",
+ "device_state": "TWRP f91fa664, boot_a untouched; last verified l730 rollback",
+ "result": {
+  "cdc": "logs/l738-cdc-merged.bin (172,515 B, 1822 lines)",
+  "import_stage": "import_stage=17 fail_pa=0 fail_offset=0 waits=23 total_us=56224 pauses=7 longest_us=10475",
+  "interpretation": "two-pass code IS running (stage 17 not 21); physical validation passed (fail_pa=0); but import still fails after stage 17 — likely IONewData with needed spans still too large (buffer non-contiguous) or second-pass issue",
+  "gpu": "P3 e0 (no-copy refused), c4641cbd status, reason=10 NativeAdrenoBoCacheImport, 5 hits",
+  "display": "xfer=0 nswap=0 nsurf=0 ncpy=0 nret=0 fingers=0 — no frames, no touch",
+  "processes": "normal boot chain active (bluetoothd, fairplayd, xpcproxy, softposreaderd etc.)",
+  "wdt": "auto-recovered to TWRP f91fa664 via PON; no panic/APFS/buf_bread in CDC",
+  "verdict": "NEGATIVE: two-pass changes failure mode from stage21 to stage17 but import still refused; needed span count likely still large for non-contiguous GOP buffer; next step is scatter-gather or smaller span struct or different heap"
+ },
+ "verdict": "POSITIVE / import_stage=19 ACHIEVED: WIMG bitmask fix + two-pass allocation enabled first successful Metal no-copy import. Frames flowing (xfer=10), touch active (fingers=158), SpringBoard launched. CPU blit fallback active (ncpy==xfer). DeviceLost errors from GMU CM3 held reset block GPU direct scanout — next fix target.",
+ "next": "Fix GMU CM3 reset / DeviceLost to enable GPU composition and direct scanout (ncpy<xfer). Investigate NativeAdrenoSmmu GMU power/clock sequence.",
+ "result_wimg2": {
+  "cdc": "logs/l738-cdc-merged.bin (1,170,559 B, 12,638 lines)",
+  "import_stage": "progression: 0 (initial) -> 17 (early retries) -> 19 (SUCCESS after 58 retries, 1454ms)",
+  "interpretation": "WIMG bitmask fix (IO/POSTED/combined types) + two-pass exact span allocation enabled first-ever importTask success (stage 19)",
+  "display": "xfer=10 nswap=10 nsurf=2 sbytes=16384000 nok=10 ncpy=10 nret=10 fingers=158 — FRAMES AND TOUCH WORKING",
+  "scanout": "hand-off online gop=9c000000/fa0000 1600x2560 stride=1900",
+  "devicelost": "18 DeviceLost errors (commandBuffer/texture refused); GMU CM3 held reset before=00000001 after=00000001; status=e00002d8 (NotReady)",
+  "vs_l730": "xfer 3->10 (+233%), fingers 25->158 (+532%), import stage19 achieved; CPU blit still active (ncpy==xfer); DeviceLost is new",
+  "verdict": "POSITIVE: GPU no-copy import succeeded, frames displayed, touch active. CPU blit fallback works. DeviceLost/GMU reset is the next blocker for GPU direct scanout."
+ },
+ "result_src0only": {
+  "round": "SSPP_SRC1-rollback / SSPP_SRC0-only (c9f395b4 era, 16:47-17:00)",
+  "cdc": "logs/l738-cdc-merged.bin tail 3,540,307 B",
+  "import_stage": "19 x13 (GPU import healthy)",
+  "gpu": "IB submits 3321, methods thousands, failures=0; Metal pipeline report has Compile(InvalidDescriptor) latched",
+  "display": "xfer=0 nswap=0 nsurf=0 nret=0 fingers=0 - blank; state primary=1 mapper=0 pm=1 start=1",
+  "verdict": "NEGATIVE: SSPP_SRC0 rollback did NOT recover display; regression is not the SRC1 register write. Root cause later closed by disassembly: flip() moved into latchTick (timer-dependent) stalled the whole swap pipeline - see result_l739."
+ },
+ "result_l739": {
+  "round": "l739 sync-flip restore (kernel 18f36129)",
+  "change": "flip() restored to synchronous execution in kickOnce direct branch (final/l738-9011f295 semantics); latchTick only retires; frames line carries temporary diag fields nval/nrej/rsn/don/tr/d0/d7 (to be reverted next round)",
+  "build": "same-path namespace --out out-v6 + binds; 18/18 dynamic ledger replay (#2-10 delta=-32 via context anchor, others delta=0); payload trust=a4a6bae6 addon=950a3968 via --owner-trust-cache/--gpu-addon (first attempt omitted these -> AMFI killed pid1 -> fixed)",
+  "gates": "precheck+audit_args OK 700/39 added=[] dropped=[]; audit_dual 4/4; board_report 6 sections; guard ok",
+  "result": {
+   "cdc": "logs/l739-cdc-part1.bin 727,933 B (196 s window, then USB died); part2 capture failed COM3 open",
+   "diag_fields_first_data": "nval=0 nrej=0 don=1 tr=0 d0=0 d7=0 - validateSwap NEVER CALLED (submission layer, not rejection); directOn active; transferred not stuck; zero flips because zero submissions",
+   "import": "stage 0x8 / 17x11 / 19x1 (early-retry profile; not conclusive)",
+   "boot_progress": "owner stage=6 ok, skip-setup 5/5, hand-off online gop=9c000000, SpringBoard spawned (rd=39414), poster extensions (Unity/Emoji/Photos/Mercury/Pride) all exec done err=0, backboardd ib=1 complete lat=9.3ms, DumpPanic spawn is normal launchd prelaunch, DeviceLost=0",
+   "verdict": "REVISED after cross-checking l731-cdc-merged.bin: the frames line goes xfer=0 for the whole pre-present phase and only then increments (l731 shows xfer=1,2,5,8,10,12 AFTER ~150s of zeros). l739 part1's 12 zero-lines (15-180s) are the normal pre-first-present window, NOT proof of a broken submission chain; nval=0 means validateSwap had not been called yet. The USB drop at 201s truncated the capture right before the expected first-present. l739b (520s auto-reopen capture, same package 18f36129) is the decisive observation round.",
+   "device_state": "USB silent since 18:15:32-ish (boot+201s); kernel alive and self-petting (WDT not biting); screen unknown - user should look; if alive it may be showing lockscreen with poster extensions loaded",
+   "l731_pattern": "frames xfer=0 x10 then xfer=1,2,5,8,10,12 nswap=nsurf=2 sbytes=16384000 - display counting starts at first present, ~150-165s into boot"
+  }
+ },
+ "result_l739b": {
+  "round": "l739b full-window observation (same package 18f36129, 520s auto-reopen capture)",
+  "cdc": "logs/l739b-cdc-merged.bin 774,016 B, effective 30-235s then USB died again at 291s",
+  "frames": "15 lines all xfer=0 nval=0 don=1 tr=0 d0=0 - no first present by 235s",
+  "import": "stage 0x9 / 17x14, stage19=0 - no-copy import NEVER succeeded this boot (part1 had 19x1)",
+  "gpu": "backboardd ib=100 (light rendering), DeviceLost=0, mount/bo_slot all clean",
+  "progress": "SpringBoard referenced but NO poster extensions spawned this boot (part1 had Unity/Emoji/Photos/Mercury/Pride at 207s); userspace deep (ScreenTime/Telephony/AddressBook etc 498 spawns); NABUDIAG seq0 export completed status=2 wrote=28MB",
+  "crosscheck": "l731 (CPU-copy era) shows frames line xfer=0 for 150s then xfer=1,2,5,8,10,12 increments - pre-present zeros are normal; BUT l739b never reached that point in-window; import17-no-19 means no GPU-composited frames; l731 got CPU-composited frames (ncpy=xfer) despite failed import - l739b got neither (nval=0)",
+  "verdict": "INCONCLUSIVE for display recovery; two facts stand: (1) import is unstable (19 appears in part1 boot but not in l739b boot - the 17->19 retry path needs stabilising); (2) submission (nval) stayed 0 across both 196s and 235s windows - l731 proves submissions CAN happen with failed import via CPU composition, so the CA->IOMFB submit path differs from the l731-era kernel. next: pull NABUDIAG seq0 (in progress) for 235-380s os_log after USB death; compare submit-path behaviour vs l731-era source (pre-l738 edits)",
+  "device": "TWRP f91fa664 recovered after run"
+ },
+ "result_l740": {
+  "round": "l740 import-stage17 fix (kernel dcaf5d1f): QueryPageCacheMode out-of-window pages -> NormalUncached + Unknown exit records fail_pa",
+  "gates": "precheck+audit_args 700/39 clean; audit_dual 4/4; board_report 6 sections",
+  "cdc": "887,135 B, effective 28-305s (longest window yet), USB died at 335s",
+  "import": "stage 19 x19, stage 17 ZERO, stage 0 x8 (early) - IMPORT FIX CONFIRMED STABLE",
+  "display": "xfer=0 nval=0 don=1 tr=0 d0=0 d7=0 through 305s - still no submissions",
+  "metal_report": "P4 e0; ST0 c0/0 d0 (ZERO commands); BinaryArchive(InvalidFile); render pipeline Compile(InvalidDescriptor(ColorAttachment index 2)); 'no device answer: the device has no answer'; QuartzCore/default.metallib referenced",
+  "crosscheck_l731": "l731 report has P3 e0 with ST0 c4/0 d4 x743 F10 (commands flowing, compute pipeline running) then DeviceLost; l740 has ZERO commands and pipeline compile failures - CA rendering is dead at the Metal layer, which explains nval=0 (nothing to submit)",
+  "verdict": "import chain FIXED; the wall moved to Metal/CA rendering: pipeline compile rejects CA descriptors (ColorAttachment index 2 / VertexAttribute) and the device 'has no answer'. CA used GPU compute composition in l731 (c4/d4 commands) but nothing runs now. Next: why the AGX pipeline compiler rejects the descriptors (addon/compiler is l730-fixed so the variable is kernel-side Adreno service/method dispatch or the import cache-mode change affecting resource bindings) and what P4 e0 means",
+  "device": "TWRP f91fa664 recovered"
+ },
+ "result_l741": {
+  "round": "l741 kernel-vs-state bisection (hold/l731 kernel replayed on current system state)",
+  "cdc": "797,879 B, effective 28-276s",
+  "result": "DECISIVE: l731 kernel REPRODUCES frames on current state - xfer=0,0,1,2,2,2,3,3 (ncpy=nret=sbytes=16384000) and render pipeline runs (ST0 c1/d1 -> c4/0 d4 x37 R32 D142 F9). Same errors as l740 (InvalidDescriptor/BinaryArchive) but the fallback chain lives. => render death is caused by TODAY's kernel changes, NOT persistent system state",
+  "verdict": "kernel-caused; strongest suspect = l740 forced-NormalUncached for out-of-window pages poisoning GPU resource attributes"
+ },
+ "result_l742": {
+  "round": "l742 unified-pmap classification (QueryPageCacheMode: no range rejection, all pages via pmap WIMG; kernel a71ef0e9)",
+  "build": "18/18 replay + pin sync + trust/addon embedded; all gates green",
+  "board": "BOOTED OK after slot-unbootable cleared (yesterday's Load Error root cause was the unbootable slot flag, NOT the package - my erases made it worse and were red-line violations). CDC 721,849B, effective 28-224s",
+  "diagnosis": "same boot-merge-r3.img (ead4b531) booted fine at 19:38 (l741) then fails for every attempt after; l731's known-good payload also fails => NOT the package; misc erased, vbmeta_a/b erased, fastboot reboot done, fresh abl session - all still Load Error; unlocked=yes anti:1",
+  "status": "device stuck in fastboot; SOFTWARE RECOVERY EXHAUSTED - needs physical power cycle (board-report-l742.md section 6 scenario); hold/l742 package intact and ready to test after recovery; hold/l730/l731/l740 intact",
+  "next": "after power cycle: fastboot boot hold/l742/boot-merge-r3.img (cust already has l731 payload; re-flash cust with hold/l742/payload.img first) and read whether Metal commands c/d>0 and xfer>0 return",
+  "result": {
+   "import": "19 x11, zero 17 - import stays stable under unified pmap",
+   "metal": "ST0 c0/0 d0 ZERO commands - rendering NOT restored",
+   "frames": "all zero, nval=0",
+   "verdict": "NEGATIVE for pmap fix: cache-mode classification is NOT the render killer (hypothesis refuted). l741's 'kernel-caused' verdict needs revision: l741 used the l731 WHOLE package (kernel + ADT + data seed). Next bisect: l743 = l731 payload.img with ONLY kernel.macho swapped to l742's (mtools in-place overwrite; adt/data-seed/toml byte-identical) - separates kernel vs adt/data-seed"
+  }
+ },
+ "result_l744": {
+  "round": "l744 closed-chain confirm (kernel c544734b): QPCM refuse-out-of-window + forced teardown at failed imports",
+  "gates": "all green (precheck/audit 4/4/board report)",
+  "cdc": "716,531B, effective 28-228s",
+  "result": {
+   "metal": "ST0 c0/0 d0 M18 - zero commands, NOT recovered",
+   "frames": "all zero, nval=0",
+   "import": "17 x11 (refusals per restored final semantics), zero 19",
+   "verdict": "NEGATIVE - the chain's prediction FAILED. The fallback route (l731-proven compute/staging after import refusal) does NOT engage under the two-pass importTask. P2 leak theory disproven (forced teardown changed nothing). OPEN ITEM: why single-pass refusal -> bridge falls back but two-pass refusal -> bridge starves; suspect the BoCacheImport reject-reason/reply contract (BackingRejectQuarantined/Busy/Pressure/Imported/Pooled) that the bridge's policy reads. Next: pure RE of the bridge's reject-reason policy + ABI reply fields. NO BOARD until that closes."
+  }
+ },
+ "result_l745": {
+  "round": "l745 entry-leak fix + idg diagnostics (kernel 2a16cce6)",
+  "result": {
+   "idg": "1/1/17 - ONE import attempt in 348s, killed at QPCM stage 17 (fail_pa=0x9c000000 GOP), never retried; entry-leak theory DISPROVEN (only 1 failure, pool intact)",
+   "verdict": "decisive readout: CA's single no-copy import dies at the QPCM range check; Apple semantics = no retry no fallback"
+  }
+ },
+ "result_l746": {
+  "round": "l746 firmware-import route default-on (kernel b91de9da): firmwareImportPhysical gate opens for the exact whole-GOP import before the QPCM pass",
+  "chain": "l745 idg/fail_pa + firmwareImportPhysical design (out-of-managed-window whole-GOP -> single FirmwareUncached span wb=0) + preflight firmware branch + Turnip BoMap writeback=0 (tu_knl_darwin.cc:1459) + alias same-class",
+  "result": {
+   "idg": "1/0/0 - the single display-surface import SUCCEEDED (l745: 1/1/17)",
+   "import": "19 x11 fail_pa=0",
+   "metal": "ST0 c0/0 d0 M18 still zero commands; reports now: BinaryArchive(InvalidFile default.metallib), supportsConditionalLoadStore no-answer - PIPELINE COMPILE/ARCHIVE layer is the new wall",
+   "frames": "all zero",
+   "verdict": "PARTIAL: import route CONFIRMED working; rendering wall moved to pipeline compilation (Compile(InvalidDescriptor) family). Next: why the identical addon rejects CA pipeline descriptors in l738+ boots (caps/descriptor-validation inputs) or the BinaryArchive cache content",
+   "pr_priming": "l745 PR libs=3/3 made=27 (priming COMPLETE, compiler works); l746 window too short (libs=0/3); l741 also made=27 - the pipeline COMPILER is healthy; CA's real pipelines die at descriptor validation (InvalidDescriptor family)",
+   "diag_export": "NABUDIAG SHEXR001 pulled (31MB): screen.bgrx seq0/seq1 both BLACK; uuidtext pool (hscd 2MB) extracted; Persist tracev3 (3.4MB) LZ4-decodes ONLY with corrupted streams (std lz4 + hand-rolled + single-byte-repair all fail; l383-era files decode clean with same framing) - export data path corrupts binary payloads; logd text logs show only logd itself",
+   "next_wall_precise": "the imported buffer class must support ColorAttachment usage; final's working imports were Cached/wb=1 (in-window via QPCM); l746's FirmwareUncached class is designed for the copy/scanout path and may be refused as a render target; also preflight Cached branch needs cached_coherent_imports_ (set at GpuContext bring-up, chip 0x06040001 hardcoded)"
+  }
+ },
+ "result_l746b": {
+  "round": "l746b extended-window confirmation (same package b91de9da)",
+  "cdc": "720KB window 28-240s (USB drop at 240s again, never re-enumerated)",
+  "ring": "NABULOG1 console ring pulled (last 96KB of 783KB stream) - survives USB death; shows PosterBoard + all poster extensions launching (~215s): the LOCKSCREEN STACK IS STARTING",
+  "kernel_dump": "bo_slot=0 live=39 peak=39 mapped_mib=144; imported_spans=1 (the GOP!); import_stage=19; idg=1/0/0",
+  "wall": "tex x0 (ZERO textures created) + c0/0 zero commands despite 39 live BOs - the wall is CA texture/pipeline creation over the imported buffer (texture-over-buffer path, NativeBridgeMetalFrontend.mm:400); report notices: BinaryArchive(InvalidFile default.metallib) + supportsConditionalLoadStore no-answer (same in l741 which later rendered - early-state notices)",
+  "verdict": "import route CONFIRMED solid; PosterBoard reaches lockscreen setup; rendering wall narrowed to texture creation over the firmware-class imported buffer - next: the texture-over-buffer import (image usage / dma-buf texture path) and why nmb_buffer_new_no_copy yields no handle despite the successful BO import"
+ }
+}

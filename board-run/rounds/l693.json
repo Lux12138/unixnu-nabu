@@ -1,0 +1,19 @@
+{
+ "tag": "l693",
+ "when": "2026-11-07T11:10Z",
+ "kernel": "607cce60",
+ "payload": "4d90e9a2",
+ "adt": "65d2a8e7",
+ "args": "693/38 (+mac-vnode-enforce=0)",
+ "boot_at": "11:05:25",
+ "recovery_at": "11:10:44",
+ "seconds_to_recovery": 319,
+ "pon": "0x40001",
+ "nabulog_bytes": 20240,
+ "frames_lines": 0,
+ "last_line": "Serial requested, consistent debug disabled or debug boot arg not present, configuring debugging over serial",
+ "panic": null,
+ "verdict": "EARLY HANG. The compile fix worked (mac-vnode-enforce present in mac_vfs.o and kernel, lazy check outside the DEBUG-only #if), but mac_vnode_enforce=0 is global: the first mac_vnode_check_signature call happens on early boot tasks, so enforcement is off for everything and boot stalls at 'Serial requested'. Death point differs from l692 (OSLog stream), confirming this is not the 0017 startup.",
+ "rolled_back_to": "l690 at 11:11:21",
+ "next": "path-scoped bypass: in the lazy block, vn_getpath(vp) and only return 0 when the path contains /System/Library/Extensions/NativeAdrenoMetal.bundle; keep global mac_vnode_enforce=1"
+}

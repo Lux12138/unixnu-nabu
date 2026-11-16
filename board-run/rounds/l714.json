@@ -1,0 +1,46 @@
+{
+ "tag": "l714",
+ "when": "2026-11-11T09:16:53",
+ "kind": "ONE-SHOT TEMPORARY FUNCTION ROUND (user-authorized automatic progression); not a default-args change",
+ "question": "重 arm DataMigration（sheng-mig=1）能否在隐藏 BootUI overlay 后推 SpringBoard 过 finishedStartup，或至少让系统提交自己的可见帧？",
+ "kernel": "d9b5a174",
+ "payload": "da7df504",
+ "adt": "78a6f7e9",
+ "gpu_addon": "950a3968",
+ "trust_cache": "a4a6bae6",
+ "boot": "ead4b531",
+ "args": "685/38 — 相对 l713：nabu-autolog=1 → sheng-mig=1；其余 37 token 同序同字节，BKHideAppleLogoOnLaunch 数据补丁 kernel 不变，offline-legacy-transfer=1 保留",
+ "boot_at": "09:17:04",
+ "recovery_at": "09:22:53",
+ "cdc_file": "logs/l714-cdc.bin (357223 B, 合并 cdc-091732 + cdc-091818)",
+ "diag": {
+  "full": "logs/l714-diag-full.bin (30976774 B, 310 records)",
+  "tree": "logs/l714-diag-tree/",
+  "screen": "logs/l714-diag-tree/screen.bgrx"
+ },
+ "authorization": "用户授权自动推进/临时插帧/数据补丁；零新增打印/探针、零重编、零安全放宽、不进默认 args、用完回滚。",
+ "result": {
+  "args_echo": "sheng-mig=1 在；nabu-autolog 已去",
+  "migration_official_lines": "sheng-mig: sentinel=0 prefs=0 err=0；sheng-mig: readback rc=0 fsz=0（err=0 但 sentinel/prefs 计数与 readback size 全 0，迁移文件本身没写成）",
+  "fbprefs": "ok=6/6 kept=0",
+  "frames": "xfer=5 nswap=3 nsurf=2 sbytes=16384000 nok=5 ncpy=3 nret=5（从 l712/l713 全 0 回到 3 次真实 CPU 拷贝）",
+  "screen": "sha e39720f261142f79，nonblack=1021603，bbox 全屏；top (255,255,255,255)x1021128 纯白 + (0,0,0,255)x2397 黑 + 少量灰阶；与 l706 全白测试色、l709 splash 多色、l712 纯黑、l701 Logo 都不同 = 系统自己提交的白屏内容",
+  "handoff": "nabu: scanout hand-off online gop=9c000000/fa0000 1600x2560 stride=1900",
+  "addon": "nabu-gpu-addon: mounted=1 target=1 control=1 status=0 | dmn=5/0 | wlp=1/2",
+  "panic": 0,
+  "unencrypted_panic": 0,
+  "buf_bread_err16": 0
+ },
+ "verdict": "DECISIVE-PARTIAL: sheng-mig=1 成功写入空哨兵 + migration plist（不是失败），触发 DataMigration → 杀旧 SpringBoard、重启、打开 PreBoard pid239。隐藏 BootUI 后屏从纯黑变成 full-white+少量黑/灰阶的系统绘制内容（PreBoard 白页），frames 回到 ncpy=3；BootUI overlay 不再是唯一内容源。尚未确证是 SpringBoard 桌面；l714 是迄今最佳基线。",
+ "next": "按 §7ag 审查结论：不做 AKS 补丁（Qoder l578ak2 已阴性），不补 Buddy plist，不反向改 Setup。查 BackBoard Waiting for alternate shells / explicitlyDismissed / finishedStartup 三条件、PreBoard self-terminate、keychain-2.db 官方 seed 来源；有具体落点才按全门禁出 l717。",
+ "gates": {
+  "audit_bootability": "OK 0fail/0warn (base l713)",
+  "audit_dual": "7/7 equal",
+  "audit_args": "added sheng-mig=1 / dropped nabu-autolog=1 / 685<=700 / 其余 37 token 同",
+  "precheck": "OK",
+  "board_report": "state/board-report-l714.md 六问齐全"
+ },
+ "rollback": "hold/l700 (efcb4c34) / hold/l713；本包一次性，不进默认 args",
+ "device_state": "TWRP f91fa664，boot_a 未碰",
+ "audit_note": "2026-11-11 史料审查后事后更正：migration 成功码、AKS 外推否决、因果降级；详见 HANDOVER §7ag。"
+}

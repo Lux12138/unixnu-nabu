@@ -1,0 +1,20 @@
+{
+  "tag": "l616-mig-noaks-argsfix",
+  "date": "2026-11-05",
+  "question": "sheng-mig=1 的迁移哨兵能否让 datamigrator 判定需要迁移并让 launchd 拉起 PreBoard（八核、无 AKS、关狗）",
+  "answer": "能。PreBoard 在 t=225.0 s 被 launchd(pid=1) 拉起（pid 241），比 l537r 的 351 s 早 126 s；整屏覆盖（bb=0,0-1599,2559）。",
+  "kernel": "0377bb00719c6cd9",
+  "payload": "bab44c3334c90677",
+  "boot": "ead4b531",
+  "args": "690 chars / 36 tokens; sheng-mig=1 sheng-smp=1 nabu-usb-reboot=1 nabu-wdt-arm-delay=86400; no AKS/touch/autolog/pull-fb",
+  "evidence": {
+    "sentinel": "sheng-mig: sentinel=0 prefs=0 err=0 / sheng-mig: readback rc=0 fsz=0",
+    "datamigrator": "spawn t=123.6 s (pid 100)",
+    "preboard": "spawn t=225.0 s (pid 241, exec 69.9 ms), launchd pid=1 path=/Applications/PreBoard.app/PreBoard",
+    "display": "powerstate1 -> powerstate0 (system blanked after the page)",
+    "ring": "NABULOG1 panic=0 dropped=0 total=478906; t_max=554.4 s; NABUSMP1 st=7x7; bb=0,0-1599,2559; gop_p0=ff000000:512000; wdt=0"
+  },
+  "reboot": "首次只发 REBOOT（session=0）无回应；改为 hello+reboot 后 HELLO OK session=… → REBOOT OK state=queued → 2 s 后 USB 消失 → 12:20:27 回 recovery。说明 nabu-usb-reboot 消费线程可用，前提是 HELLO 握手。",
+  "verdict": "PASS - 白页从“碰运气”变成可点名复现的路径：sheng-mig=1 → 哨兵 → datamigrator → PreBoard；八核同跑；回收可自动化。",
+  "next": "触摸帧协议（bad-sum）修好后加 nabu-touch=1，页面才可交互；另需解释 powerstate0 后唤不醒"
+}

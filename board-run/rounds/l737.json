@@ -1,0 +1,30 @@
+{
+ "tag": "l737",
+ "when": "2026-11-12T08:41:19",
+ "kind": "ONE-SHOT DPU / MDP EL1 READABILITY ROUND; DECISIVE-NEGATIVE",
+ "question": "nabu-dpu=2 单次只读探针能否从 EL1 安全读取 VIG/MDP 窗口并给出 dpu:vig-va/len、aim、dpu:read、n_ssp/ssp，而不触发同步外部 abort？",
+ "kernel": "d3598dd6",
+ "payload": "d49f0c09",
+ "adt": "78a6f7e9",
+ "gpu_addon": "950a3968",
+ "trust_cache": "a4a6bae6",
+ "boot": "ead4b531",
+ "args": "700/39 — added=nabu-dpu=2, dropped=nabu-state-ring=10; 8 spaces pad TOML cluster; all other tokens identical",
+ "authorization": "用户授权 7×24 自动推进且明确『没有我的授权不允许停下来』；一次性只读轮，用完回滚，不进默认 args；零新增打印/探针、零重编、零安全放宽、不碰 boot_a。",
+ "package": {
+  "kernel": "hold/l730 kernel unchanged",
+  "five_others": "gpu-addon.bin/kernel.macho.adt/owner-trust.bundle/boot-merge-r3.img unchanged; payload FAT changed only unixnu.toml args",
+  "gates": {"audit_bootability": "WSL OK 0fail/0warn", "audit_dual": "11/11", "audit_args": "OK 700/39 added=nabu-dpu=2 dropped=nabu-state-ring=10", "precheck": "PASS", "precheck_check": "PASS", "board_report": "six sections PASS", "guard_no_boot_flash": "PASS"}
+ },
+ "result": {
+  "cdc": "logs/l737-cdc-merged.bin (copied from logs/cdc-084146.bin), 8465 B, sha8 1c896b4b, 131 lines",
+  "panic": "Kernel data abort. at pc 0xfffffff007a3f4a4, lr 0xfffffff007a3f470; esr 0x96000010; far 0xfffffff2b0482000",
+  "dpu_output": "dpu:read=0, dpu:vig=0, no dpu:aim/vig-va/len/n_ssp/ssp; aborted before first MDP register read completed",
+  "controls": "NativeUfs: args pet=600 arm=0; pull channel attach=1; device automatically back in TWRP f91fa664; PON 0x80041 via WDT path",
+  "safety": "no APFS unencrypted / buf_bread; boot_a untouched; misc re-armed; cust restored to hold/l730 and verified byte-for-byte after round",
+  "capture": "background capture_l737.py did not recognize cdc-084146.bin because its mtime predated boot_start; stopped after manual CDC read. No double slot because early abort."
+ },
+ "verdict": "DECISIVE-NEGATIVE: l730/current firmware EL1 state cannot safely read the MDP/VIG window even with nabu-dpu=2's single-register mode. This reproduces historical l518 nabu-dpu=1 synchronous external abort (esr 0x96000010) and closes the first DPU display-SMMU gate. Stop DPU register/flip route until clock/GDSC/power/security-domain readability is solved by a separate lower-level bring-up. Best verified package remains hold/l730.",
+ "next": "Do not run nabu-dpu=1/2 or sheng-dpu=3 again. The only remaining credible performance route is the full unixnu tree/build/prelink/payload pipeline with l701–l730 patches re-applied at source/generation stage, then a two-pass importTask rebuild. Preserve l737 CDC as negative evidence.",
+ "rollback": "hold/l730; cust sha256 3876e1a2..., misc b9f0f5a5... re-verified."
+}

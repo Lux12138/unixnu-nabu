@@ -1,0 +1,37 @@
+{
+ "tag": "l728",
+ "when": "2026-11-12T00:14:00",
+ "kind": "ONE-SHOT TEMPORARY LATE-DIAGNOSTIC-WINDOW ROUND (user-authorized automatic progression); DECISIVE-NEGATIVE / EARLY-RESET",
+ "question": "保留 300 s 第二槽约 36 MB 导出 I/O 续命，把独立第一槽后移到 450 s、并把喂狗截止从 600 s 延到 900 s，能否取得覆盖 296–450 s 的非 stale 用户态 os_log / 屏快照，判定 SystemAppMigrator 是否完成、Migration complete / finishedStartup / Dismissing overlay / screen owner is now 是否出现、屏是否离开 PUIProgressWindow？",
+ "kernel": "9b141ea0",
+ "payload": "b5f09f4c",
+ "adt": "78a6f7e9",
+ "gpu_addon": "950a3968",
+ "trust_cache": "a4a6bae6",
+ "boot": "ead4b531",
+ "args": "700/39 — 与 l727/l723 逐字节相同；added=[] dropped=[]",
+ "boot_at": "00:01:57",
+ "recovery_at": "00:08:00",
+ "cdc_file": "logs/l728-cdc-merged.bin (1,254,157 B, sha8 f7be06b6; 单段 cdc-000226.bin 0–332.6 s)",
+ "diag": {
+  "seq0": "未触发；diagAt0=450 落在复位之后",
+  "seq1": "base=124340219 bytes=31226315 wrote=31227904 files=319 skipped=1 errors=0",
+  "seq1_full": "logs/l728-diag-seq1-full.bin (36,044,800 B, sha8 c6dfe84b)",
+  "seq1_tree": "logs/l728-seq1-diag-tree/ (322 records)",
+  "oslog": "logs/l728-seq1-v1.jsonl (139,101,027 B, sha8 65d6fe73; 138,577 行, 0 解析失败, 真实 40.0–276.9 s)"
+ },
+ "authorization": "用户授权 7×24 自动推进到能开机/必要时延后看门狗/临时诊断轮；一次性临时轮、用完回滚、不进默认 args；零新增打印/探针、零重编、零安全放宽、不碰 boot_a。",
+ "result": {
+  "patch": "相对 l727 仅 kernel 两条同长 ARM64 movz 立即数共 4 文件字节：@0xa384f4 petSeconds 600→900（084b8052→88708052）、@0xa336a4 diagAt0 220→450（881b8052→48388052）。diagAt1=300 @0xa33690、APFS nop、args 700/39、其余五文件逐字节相同；全套门禁与六问板报 PASS",
+  "wdt": "CDC 启动回显 NativeUfs: args hang=0 panic=2 autolog=0 ... pet=900 arm=0，data tree attr=49 attrfail=0；00:01:57 boot、00:08:00 自动回 TWRP f91fa664，约 363 s wall；内核 t= 到 332.6 s，无 panic: / panic( / APFS unencrypted / buf_bread；TWRP dmesg Powerup reason=0x80041（内核自复位，与历史 l405 同类）。pet=900 没有把寿命延到 450 s，证明本轮短板不是喂狗截止，而是 300 s 之后缺少足以继续喂狗并触发 seq0 的 I/O/活动。BITE / WDT.CFG / Mu / NABU_WDT_BITE_MS / arm-delay=0 全未动",
+  "diag_slots": "300 s 附近只有 NABUDIAG1/2 seq=1：base=124340219、31,226,315 B/319 files、status=2 errors=0；NABUDIAG seq=0 全程 0，450 s 阈值未到达。l724/l725 的「移动 diagAt1 会丢续命 I/O」机制在反序组合里没被绕过；后触发的 seq0 需要 300 s 后另有 UFS I/O 完成来 arm，但 CDC 在 332.6 s 停笔",
+  "oslog": "138,577 行、0 解析失败、真实 40.0–276.9 s；ContainerMigrator 139.2 s success 1；LaunchServicesMigrator 139.2 s begin 后 259.2 s 出 PRECAUTIONARY stackshot，没有完成行，也没有进入 MSUDataMigrator/SystemAppMigrator。Migration complete / Dismissing overlay / screen owner is now / finishedStartup 全 0；AXSpringBoardServer 28 条 No such process、checkInAndWaitForDataMigration 1；keychain-2.db 仅 1 条 path 打印，Failed to query keychain / Migration failed / MIInstallerErrorDomain 105/4 / installd home Fault 全 0。与 l727 对比，迁移链反而回到 LaunchServicesMigrator 卡点，说明 l726 完成态 plist + l727 哨兵失效带来的 SystemAppMigrator 推进对运行期 I/O/时序敏感，不是稳定基线",
+  "screen": "seq1 screen sha 03c1acd6431b6499，11210 非黑、bbox 281..519/548..755、168 colors；仍是同一 PUIProgressWindow，不是桌面",
+  "static_followup": "官方 SystemAppMigrator Code=128 是清理遗留 coordinator 的正常分支；官方完成链应为 All system apps finished installing → Validating App Install State → System apps finished demoting → MobileInstallationSetSystemAppMigrationComplete → completed migration ... → Notifying clients of completion / com.apple.datamigrator.migrationDidFinish / Data migration complete; waiting 3 seconds。l727 v2 只到前两步（274.0 s）。System build version (null) 真正来源是 /var/mobile/Library/Preferences/com.apple.DataMigration.plist 的 LastSystemVersion，板上 kernel 写的是 com.apple.migration.plist；现有同长补丁不能直接改正确域/文件。SpringBoard 交还四标志依赖 backboardd 等 com.apple.migration.didComplete 与 SpringBoard finishedstartup，AXSpringBoardServer 是进程内动态注册，无官方单变量可跳过"
+ },
+ "verdict": "DECISIVE-NEGATIVE / EARLY-RESET：把 petSeconds 延到 900 后 WDT 延期仍正常、板子仍自动回 TWRP 且无需人工长按，但没有产生 450 s 的 seq0 晚窗；300 s 第二槽正常，332.6 s 后内核日志停笔、约 363 s 回收、PON=0x80041。450 s 阈值依赖 300 s 后继续的 I/O，而反序去掉 220 s 第一槽后本轮连 LaunchServicesMigrator 都没完成，比 l727 迁移断点更早。停止纯时间常数/反序槽方向；保留 l727 为迁移断点最前的实验包、hold/l723 为最佳稳定双槽/启动基线。晚窗若还要做，必须先把晚槽放进 300–330 s 实测活动窗口，且不能丢 220/300 双槽的既有 I/O 形状。",
+ "next": "不再加 petSeconds 或把 diagAt0 推到 450；不再重复 plist 键/哨兵/迁移触发方向。按 AGENTS.md 0.5 先静态核对 DataMigration.plist 正确域/路径能否用现有 kernel 内嵌 plist 路径同长改写（单变量、需双审计），以及 300–330 s 内的第二份 tracev3 是否能通过 nabu-diag-at0 boot-arg 与 nabu-state-ring 等长交换获得；只有闭合静态链后才出 l729。若都不成立，则如实收敛为『桌面交还仍需恢复编译侧同构建根后做路线级改动』，设备保持 TWRP。",
+ "gates": {"audit_bootability": "OK 0fail/0warn (base l727)", "audit_dual": "7/7 equal (audit-l728.json)", "audit_args": "700/39 -> 700/39, added=[] dropped=[]", "precheck": "OK (state/precheck.json)", "board_report": "state/board-report-l728.md 六问齐全", "guard_no_boot_flash": "OK", "static_official": "NativeUfs.cpp:2912-2931/3271-3289/4411-4416, NativeLegacyProbe.cpp:1061/1101/1110/1230, BootDiagExport.c:215/271"},
+ "rollback": "hold/l723 (最佳稳定启动/诊断基线) / hold/l727 (迁移断点最前实验包) / hold/l726 / hold/l722 / hold/l721 / hold/l720 / hold/l719 / hold/l718 / hold/l714 / hold/l700；本包一次性，不进默认 args",
+ "device_state": "TWRP f91fa664，boot_a 未碰；无 panic / APFS unencrypted / buf_bread err16；PON=0x80041 内核自复位"
+}

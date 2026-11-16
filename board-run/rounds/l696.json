@@ -1,0 +1,94 @@
+{
+ "tag": "l696",
+ "when": "2026-11-10T10:56:10",
+ "question": "t733-managed-rt-normal=1 能否让 CA 的 no-copy surface 通过 importTask（不再报 HostMemory/NotRepresentable），frames 是否越过 6？",
+ "kernel": "efcb4c34 (= l690/l695p)",
+ "payload": "cfbeb7eb",
+ "adt": "78a6f7e9",
+ "gpu_addon": "dcd25289",
+ "trust_cache": "b1bd85cc",
+ "boot": "ead4b531",
+ "args": "698/38 (tag l696, + t733-managed-rt-normal=1)",
+ "boot_at": "10:56:10",
+ "recovery_at": "11:00:52",
+ "cdc_file": "logs/cdc-105722.bin (258106 B)",
+ "diag": {
+  "export": "logs/l696-diag-full.bin (32 MiB, SHEXR001/M2VCACH1, count=253, bytes=26045564)",
+  "archive": "logs/l696-arch-v2 (236 uuidtext + 1 dsc + Persist/Special tracev3)",
+  "oslog": "logs/l696-v1.jsonl (23466 行, 9608 条解出正文)"
+ },
+ "cdc_evidence": {
+  "frames_last": "xfer=6 nswap=6 nsurf=2 sbytes=16384000 nok=6 ncpy=6 nret=6",
+  "frames_lines": 11,
+  "display_open_lines": 7,
+  "IOMFB_lines": 7,
+  "No_Default_FB": 1,
+  "spawn_lines": 1064,
+  "boot_args_confirmed": "t733-managed-rt-normal=1 present, sheng-build-tag=l696"
+ },
+ "oslog_key_counts": {
+  "surface import refused": 0,
+  "HostMemory": 0,
+  "NotRepresentable": 0,
+  "Metal failed to load binary archive": 0,
+  "metallib": 0,
+  "native-metal (plugin, pid 56)": 6,
+  "no device answer": 6
+ },
+ "comparison_vs_l695u": {
+  "l695u": {"surface import refused": 5, "HostMemory": 5, "NotRepresentable": 5, "metallib Fault": 1, "frames": 6, "screen": "unknown"},
+  "l696":  {"surface import refused": 0, "HostMemory": 0, "NotRepresentable": 0, "metallib Fault": 0, "frames": 6, "screen": "pure black"},
+  "note": "两轮 os_log 均用 macul 解出；l695u 9091 条 / l696 9608 条正文，量级一致，可比"
+ },
+ "screen": {
+  "file": "logs/l696-screen.bgrx.bin",
+  "result": "800x1280 全屏 (0,0,0,255) 不透明纯黑，非黑像素=0",
+  "l690_reference": "有 10255 个非黑像素（113x137 苹果 Logo 残留）",
+  "l695p_reference": "纯黑 (0,0,0,0)"
+ },
+ "verdict": "PARTIAL PASS —— 根因链的第一环确认打通，但开机未完成。",
+ "confirmed": [
+  "t733-managed-rt-normal=1 已进入 boot-args（CDC 原文可查）",
+  "插件确实被 backboardd(pid56) 加载（uuid 4C4C44A155 的 6 条 native-metal 日志）",
+  "l695u 的 5 条 'surface import refused: no-copy buffer: Unsupported{HostMemory, NotRepresentable}' 在 l696 归零",
+  "Metal failed to load binary archive (default.metallib) 也归零",
+  "⇒ NativeAdrenoCpu.cpp 的 VM_WIMG_RT→Unknown→importTask 拒绝这条链，被 t733 参数解开了"
+ ],
+ "still_blocked": [
+  "frames 仍停在 6（与 l695u/l695p 相同），没有新帧提交",
+  "屏上仍是纯黑，没有 UI",
+  "PUB / STn 仍为 0：插件没进入 published 模式 / scanout 线程未起"
+ ],
+ "ruled_out": [
+  "native-metal: no device answer 的 6 条（gpuCoreCount 等）不是故障：NativeBridgeMetalFrontend.mm:265-268 注释明确写 'A device answer the runtime lacks is reported at creation in every process and is harmless'，且代码特意把它排除在 gFirstProblem 之外。两轮都是 6 条，是常量基线。",
+  "CA/WindowServer 本轮只有 3 条无关 error（Connection invalid / OrientationDev），无渲染失败、无 metallib Fault、无 backboardd 崩溃。",
+  "CDC 全程 fingers=0（没人触摸面板）；alioth 记录指出 compositor 只在被请求时才提交帧，空闲态 swaps 只有 8~10 条。frames=6 可能就是空闲初始帧，不一定是故障。",
+  "PUB/STn=0 不是有效判据：PUB 走 streamText()/gpu->mark() 写内核标记流，而 nabu_capture_append 是 weak 空实现、nabu_log_probe_poll 无人调用，PUB 本来就没有到 CDC 的输出通道。",
+  "publish::requested() 版本不匹配的怀疑已排除：l696 用的 addon(dcd25289) 插件 exe(083fa851) 读同级 .publish 文件，而该 marker 确实在 addon 里；且 os_log 没有针对 backboardd/插件路径的 sandbox deny。两套 addon(l695p 读文件 / l695u 读 Info.plist key) 各自自洽。"
+ ],
+ "full_chain_audit": {
+  "1 GPU硬件": "OK — service published output_bits=40",
+  "2 插件加载": "OK — backboardd pid56, uuid 4C4C44A155",
+  "3 surface import": "OK(本轮修复) — refused/HostMemory/NotRepresentable 5->0",
+  "4 Data卷": "OK — disk5s1 mounting Data -> mount-complete, 无 APFS panic",
+  "5 IOMFB": "OK — census2 cl=2 clients=pid56,backboardd|pid54,thermalmonitord",
+  "6 帧提交": "部分 — frames=6 空闲初始帧",
+  "7 屏上内容": "未达成 — 纯黑",
+  "8 SpringBoard": "停在激活 — FBSystemShellInitialize/UserInteractiveFocal, mobileactivationd 反复重启(115->116...), MobileActivation ErrorDomain Code=-1 'Migration failed.'"
+ },
+ "root_cause_of_black": {
+  "finding": "黑色不是 '没提交帧'，是显示驱动主动填的。",
+  "evidence": "l696 全屏像素 (0,0,0,255) = 0xff000000 小端 = NativeLegacyDisplay.cpp:388 blank swap 的 native_legacy_fill_pixels(...,0xff000000U)。",
+  "trigger": "NativeLegacyRequest.h:22-28 native_legacy_blank_state(): 当 swap 的所有 updated layer 都 disabled（updated==disabled!=0）且背景为黑时 accepted=true，走 'Validated blank swap (all layers disabled over black)' 分支 solid-fill 黑色。",
+  "meaning": "backboardd/SpringBoard 提交的是一个 '所有图层都关掉' 的 swap —— 上层根本没往 surface 里画内容。这是用户态 UI 没产生内容，不是显示驱动或 GPU import 的问题。",
+  "l690_vs_l696": "l690 的 10255 非黑像素是 iBoot 苹果 Logo 残留(居中 113x139 白块)，不是 SpringBoard UI；l696 连残留都清掉了，说明 blank swap 覆盖了整个 scanout。"
+ },
+ "setup_state": {
+  "skip_setup_in_payload": false,
+  "SetupDone_kernel_write": "内核 efcb4c34 里 0012 补丁的 SetupDone/SetupFinishedAllSteps plist 字符串存在，且 os_log 有 2 条 SetupDone 写入证据",
+  "but": "mobileactivationd 仍循环、Migration failed、SetupAssistantHelper 出现 —— SetupDone 不足以让 SpringBoard 进入桌面",
+  "note": "与交接文档 §11/§12 历史结论一致：Data 卷/Setup/激活链是白屏/黑屏的上层根因"
+ },
+ "next": "黑屏根因已定位到用户态 UI 未产生内容（blank swap），与 GPU import 无关。要出桌面，下一步应转向 Setup/激活链：① 让 mobileactivationd 的 Migration failed 消失（boot-manifest-hash / preboot / activation seed）；② 或复用 ios-sweet 的完整 skip-setup 三件套（purplebuddy + mobileactivationd data_ark + springboard prefs）并确认写入落盘；③ 也可按 alioth 经验注入触摸触发合成帧，先验证 UI 内容是否真的存在。",
+ "honest_caveat": "板报 §2 的传导链是静态推导 + alioth 上游对照；本轮用 os_log 实证了 import 拒绝消失，但没有实证 frames 增长或出 UI。t733 参数解决的是‘surface import 被拒’这一个具体问题。黑屏是更上层的 Setup/激活问题，不是本轮能解决的。"
+}

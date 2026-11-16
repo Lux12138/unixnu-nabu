@@ -1,0 +1,38 @@
+{
+ "tag": "l730-reproduction",
+ "when": "2026-11-12T01:40:00",
+ "kind": "USER-REQUESTED REPRODUCTION BOOT OF VERIFIED l730 PACKAGE (no new experiment variables)",
+ "question": "用户要求重新启动已验证 l730 包，目视确认锁屏并尝试物理滑动；这次只收集用户现场反馈与同一包的运行期 CDC，不改包/args/WDT/诊断槽。",
+ "kernel": "d3598dd6",
+ "payload": "3876e1a2",
+ "adt": "78a6f7e9",
+ "gpu_addon": "950a3968",
+ "trust_cache": "a4a6bae6",
+ "boot": "ead4b531",
+ "args": "700/39 — 与已验证 l730/l727 逐字节相同；added=[] dropped=[]",
+ "boot_at": "01:32:19",
+ "recovery_at": "01:37:14 (CDC watcher done) / 01:37:57 (slot pull)",
+ "cdc_file": "logs/l730r-cdc-merged.bin (1,014,001 B, sha8 4514102e; 单段 cdc-013246.bin 0–304.9 s)",
+ "diag": {
+  "seq0": "base=124307451, 38,502,400 B, sha8 b93fa63f; 按 9400×4 KiB 拉取",
+  "seq1": "未触发；用户观察/触摸窗口与自动回收发生在 300 s 第二槽之前，不能据此推系统卡死"
+ },
+ "authorization": "用户明确要求『重新启动一次，我来看一下，看看能不能滑动』；复现使用同一已验证包，一次性、不进默认 args；零新增打印/探针、零重编、零安全放宽、不碰 boot_a。",
+ "user_feedback": {
+  "text": "确实进入了锁屏页面，也有触摸，但是太卡了",
+  "meaning": "用户现场实证：完整 iPadOS 锁屏可见、物理触摸有效，但交互/动画明显卡顿。不是日志推断；这是本轮唯一新增判据。"
+ },
+ "result": {
+  "gates": "刷新 precheck 到『用户目视/滑动复现』；precheck_check OK、audit-l730 双审计 7/7、board-report-l730 六问齐全、guard_no_boot_flash OK；go_round_next.sh 仅 flash cust + 最后重 arm misc + fastboot boot，未写 boot 分区",
+  "wdt": "CDC 启动回显 pet=600 arm=0 autolog=0；内核 t= 到 304.9 s；PON=0x80041 内核自复位后自动回 TWRP f91fa664；无 panic: / panic( / APFS unencrypted / buf_bread；无需人工长按",
+  "touch": "fingers 从 4 累计到 436；NABU TOUCH status reads=9489 fingers=4 fcnt=6 reports=5 rc=0 ... opened=1 isopen=1 kids=1 kid=IOHIDInterface clients=1 cname=IOHIDEventServiceUserClient ccreator=pid 56, backboardd svcFound=1 drvFound=1；触摸固件/HID/backboardd 事件链通",
+  "frames": "用户滑动段 nabu-display: frames 251.8 s xfer=1 nswap=1 fingers=4；272.7 s xfer=3 nswap=3 fingers=200；290.7 s xfer=5 nswap=5 fingers=436。约 18–21 秒才增加 2 帧，ncpy/nret 同步到 5，非 display 停摆但帧率极低",
+  "gpu": "NativeAdrenoProfile: S seq=8..17 后段 lat≈0.42–0.47 s；NativeAdrenoMetal: row ... ctc≈0.43–0.56 s；NativeAdrenoProfile 共 592 行、nabu: spawn 1331、QCOM USB LOSS 16。高频调试输出与 GPU/Metal copy 延迟同段存在，但尚不能单独定因果",
+  "safety": "设备 TWRP f91fa664，boot_a 未碰；本轮未改任何 kernel/args/WDT/诊断槽/迁移状态；后台记录脚本首次因路径批量替换笔误失败，修正后完成采集，板子运行未受影响"
+ },
+ "verdict": "USER-CONFIRMED LOCKSCREEN + TOUCH / PERFORMANCE-LIMITED：项目已从『能否开机』推进到『确实进入锁屏、触摸有效、但很卡』。核心开机目标达成；剩余问题收敛为交互帧率/显示合成/调试 I/O 性能，而不是迁移完成、桌面交还、触摸驱动或 WDT 自动回收。",
+ "next": "保持 hold/l730 为最佳已验证包；先离线核查现有 boot-arg 与 kernel 内已有旋钮能否在 ≤700/39、保持 sheng-smp=1 + arm-delay=0、自动回 TWRP 的前提下安全减少高频调试输出或降低 GPU/copy 延迟。未闭合静态链前不出性能轮；不重编内核、不新增探针、不碰 boot_a、不放宽安全策略。",
+ "gates": {"precheck": "OK (reboot-precheck.txt)", "precheck_check": "OK (reboot-precheck_check.txt)", "audit_dual": "audit-l730.json 7/7", "board_report": "state/board-report-l730.md 六问齐全", "guard_no_boot_flash": "OK"},
+ "rollback": "hold/l730 保持为当前最佳已验证包；hold/l727 / hold/l723 等仅作回滚链",
+ "device_state": "TWRP f91fa664，boot_a 未碰；无 panic / APFS unencrypted / buf_bread err16"
+}

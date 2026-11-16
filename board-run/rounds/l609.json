@@ -1,0 +1,28 @@
+{
+  "tag": "l609-smp-affmask8",
+  "date": "2026-11-05",
+  "question": "MAX_CPUS 4→8（仍是 single=1 单核模式）会不会改变次核行为或引入副作用",
+  "kernel": "158cf87adb486a3b",
+  "payload": "b3f13d4b2ce328fc",
+  "boot": "ead4b531",
+  "args_len": 688,
+  "args_tokens": 38,
+  "tokens_added_vs_l608": [],
+  "window": "32 MiB (userdata tail)",
+  "pon": "0x80041",
+  "ring_header": "NABULOG1 v1 flags=0 panic=0 length=98304 dropped=0 total=388774",
+  "t_max_s": 352.11,
+  "spawn_err0": 157,
+  "preboard_spawn": 0,
+  "nabusmp1": "boot=81000000 st=7,0,0,0,0,0,0 fl=0,0,0,0,0,0,0 rc=0,0,0,0,0,0,0 (8 samples identical)",
+  "smpmn1": "id=1 rc=0 it=1 st=7 stage=0x23 sid=1 te=1 tx=1 sctlr=3454593d",
+  "display": "nsurf=2 nswap=4 fr=0 fbcon=4 gop=1600x2560",
+  "delta_vs_l606": "+2/-2, both are MAX_CPUS macro expansion in console_ring assert strings: (256 * (4 + 1)) -> (256 * (8 + 1))",
+  "verdict": "PASS - MAX_CPUS=8 with single=1 is functionally identical to l608. No panic, no dropped ring lines, NABUSMP1/SMPMN1 byte-identical. First spawn 99.01 s vs 94.78 s (+4.2 s) is inside the +-20% band (首spawn-execdone 48.63 -> 52.83 s, +8.6%), not counted as regression; l610 is the repeat sample.",
+  "next": "l610: drop sheng-smp-single, start 7 secondaries, 8-slot CpuDataEntries cpu_id/phys_id print",
+  "notes": [
+    "no PreBoard spawn in either l608 or l609 - same as before",
+    "touch lanes unchanged (NABUTCH7/8/9 rows present, ok=000)",
+    "kernel image layout check: 0xfffffff007476420 = and x0,x15,#0xffff; +0x28 = add x3,x1,#0x80; l606 SCTLR gate absent (upstream no-op form at 0x478350-0x47836c)"
+  ]
+}

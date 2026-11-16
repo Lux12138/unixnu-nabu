@@ -1,0 +1,55 @@
+{
+ "tag": "l699",
+ "when": "2026-11-10T12:59:52",
+ "question": "开启 nabu-gpu-observe=1 后，Metal 发现链诊断能给出什么：有没有人读 MetalPluginName、谁读的、backboardd 有没有 open AGXAccelerator？",
+ "kernel": "efcb4c34 (= l698)",
+ "payload": "33e8b345",
+ "adt": "78a6f7e9",
+ "gpu_addon": "39dc17fe (新版)",
+ "trust_cache": "76783683",
+ "boot": "ead4b531",
+ "args": "698/38 (tag l699, t733-managed-rt-normal=1, nabu-gpu-observe=1, 去掉 nabu-state-ring=10)",
+ "boot_at": "12:59:52",
+ "recovery_at": "~13:03",
+ "cdc_file": "logs/l699-cdc.bin / logs/cdc-130019.bin (322594 B)",
+ "note": "纯诊断轮，零内核改动。nabu-gpu-observe=1 是现成开关（NativeAdrenoService.cpp:1310），A640State::poll():1348 每轮调 observation_.sample，在 GPU ready 后 0/10/30/120 s 用 IOLog 打 4 次。",
+ "observation": [
+  {"slot":"1/4","since_ready_us":11731,"metal_opens":0,"discovery_reads":0,"foreign_opens":0,"metal_calls":0},
+  {"slot":"2/4","since_ready_us":10002706,"metal_opens":0,"discovery_reads":0,"foreign_opens":0,"metal_calls":0},
+  {"slot":"3/4","since_ready_us":30006514,"metal_opens":0,"discovery_reads":0,"foreign_opens":0,"metal_calls":0},
+  {"slot":"4/4","since_ready_us":120010220,"metal_opens":2,"closes":2,"discovery_reads":0,"foreign_opens":1,"foreign_type":"00000001","metal_calls":10,"selector":9,"status":"e00002c2","ext_entries":266,"ext_status":"e00002c2"}
+ ],
+ "metal_open_slots": [
+  "slot=0 process=backboardd type=00004147 macf=1 resolver=3758097122 attach=1 foreign=0",
+  "slot=1 process=backboardd type=00000001 macf=1 resolver=3758097122 attach=1 foreign=1",
+  "slot=2 process=mediaserverd type=00004147 macf=1 resolver=3758097122 attach=1 foreign=0"
+ ],
+ "metal_method_counts": "method 1 (Query) calls=1 ok, method 2 (BoAlloc) calls=2 ok, method 3 (BoMap) calls=2 ok; selector 9 (SetMetadata) status=e00002c2=kIOReturnBadArgument",
+ "static_correlates": {
+  "0x4147": "NativeAdrenoPluginOpenType (NativeAdrenoPublish.cpp:74)，插件专用 open type，让驱动区分插件与原生 IOGPU 客户端",
+  "0x0001": "原生 IOGPU library 的 type 1 + API value（同文件 :72-73 注释），foreign=1",
+  "selector 9": "NativeAdrenoMethodSetMetadata (NativeAdrenoABI.h:23)",
+  "e00002c2": "kIOReturnBadArgument (IOReturn.h:147)",
+  "discovery_reads": "对应 diag.name_reads / native_adreno_metal_askers[]，记的是谁读 MetalPluginName 属性"
+ },
+ "frames": "xfer=5 nswap=5 nsurf=2 sbytes=16384000 nok=5 ncpy=5 nret=5",
+ "gpu": "NABU GPUACC published cls=AGXAccelerator props=5; NativeAdrenoA6xx service published output_bits=40",
+ "panic": 0,
+ "verdict": "有决定性信息，且纠正了两处早判。① 不是 'no client registered'：t=120 s 时 backboardd 用 type=0x4147（插件专用）open 了 AGXAccelerator，macf=1 attach=1，且我们自定义 ABI 的 Query/BoAlloc/BoMap 全部成功（metal_method 1/2/3 ok）。② 但 discovery_reads 四次采样全为 0 —— 没有任何进程读 MetalPluginName 属性，所以内核侧的 MetalPluginName→NSBundle 发现链没被触发；backboardd 走的是 IOGPU/AGXAccelerator 原生路径。③ selector 9 (SetMetadata) 返回 kIOReturnBadArgument，ext_entries=266 也有 ext_status=e00002c2，是本轮唯一可见的失败返回。④ 插件在 t<120 s 完全没动作，直到 t≈120 s 才有 open。",
+ "why_it_matters": "l696/l697/l698 一直假设 '插件被 backboardd 加载'（依据是旧插件 uuidtext 的 no device answer 日志）。l699 证明那是误读：真正发生的是 backboardd 在 t=120 s 直连 AGXAccelerator user client 跑我们的 ABI；Metal 插件发现链（MetalPluginName 读取）从未发生。因此换 addon 版本、加 t733、注入触摸都不可能改变这条路径 —— 它们都在插件里，而插件没被发现。",
+ "ext_entries_meaning": {
+  "value": 266,
+  "source": "NativeAdrenoPublish.cpp:1604 __atomic_fetch_add(&native_adreno_metal_diag.ext_entries,1) 在 externalMethod 入口",
+  "meaning": "backboardd 的 IOGPU user client 实际进入了 266 次 externalMethod，不是没连上。ext_status=e00002c2 只是最后一次的返回；sel_bits 记录所有调过的 selector。",
+  "selector9": "NativeAdrenoMethodSetMetadata 在 runCore:1219-1229 只把文本复制进 report[64] 然后继续 dispatch，本身不返回错误；e00002c2 来自下层 core_->dispatch 或另一个 client（foreign=1 的 type=1 原生 IOGPU 客户端）。不是插件致命失败。",
+  "conclusion": "进一步否证 'no client registered'：客户端活跃、ABI 的 Query/BoAlloc/BoMap 成功、externalMethod 进入 266 次。"
+ },
+ "verdict_corrected": "决定性信息（含一次早判纠正）：① 绝不是 'no client registered' —— t=120 s backboardd 用 type=0x4147（插件专用 open type）open 了 AGXAccelerator，macf=1 attach=1，自定义 ABI 的 Query/BoAlloc/BoMap 成功，externalMethod 进入 266 次。② 但 discovery_reads 四次全 0：没有任何进程读 MetalPluginName 属性 ⇒ 内核侧的 MetalPluginName→NSBundle 插件发现链没被触发；backboardd 走的是 IOGPU/AGXAccelerator 原生 user-client 路径。③ selector=9 (SetMetadata) 的 e00002c2 是最后一次 externalMethod 返回值，不是稳定致命错误。④ 插件在 t<120 s 完全没动作。",
+ "next": "静态两条：① 查 MetalPluginName 为什么没被读 —— 我们仿造的 IOAcceleratorES 是空类（OriginalAcceleratorABI.h:8-11，零方法，sizeof==IOService==136），iOS 侧 Metal 发现可能要求 IOGPUFamily/IOAccelerator 的真实类或额外属性，registerService 后只有 user-client open 而没有 property 读取。② 查 externalMethod 的 sel_bits / 最后一次 e00002c2 是哪个 selector、哪个 client，判断 IOGPU 客户端是否完成了 device 初始化（observation 只打了 1..19 的 method 计数与 last_selector，要看完整需 dump_stats 或 sel_bits 原始值）。两者都可离线推进。",
+ "ruled_out": [
+  "插件 addon 版本（l695u 新版 vs l695p 旧版）：l698 换新版后 import 仍 0、PUB 仍 0、frames 仍 5",
+  "t733（import 修复）：l696/l698 都实证 import 拒绝 0，但不改变发现链",
+  "触摸注入（l697）：sat=0",
+  "no client registered（本轮纠正）：t=120 s 有 backboardd type=0x4147 的 open + ABI 调用成功"
+ ]
+}

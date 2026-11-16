@@ -1,0 +1,33 @@
+{
+ "tag": "l690",
+ "when": "2026-11-07T08:30Z",
+ "kernel": "efcb4c34",
+ "payload": "059f997a",
+ "adt": "78a6f7e9",
+ "args": "673/37 (nabu-mapper removed)",
+ "seconds_to_recovery": 593,
+ "pon": "0x40001",
+ "frames_xfer": 5,
+ "cdc": {
+  "iofb_open_pids": [84, 56, 94, 54, 72, 85],
+  "springboard_27": "never opens IOFB",
+  "state_before_85": "nodef=0",
+  "state_after_85": "nodef=16384000",
+  "backboardd": "spawn 97.6 s, exec done 122.3 s (24.8 s exec), open IOFB, s_map_display_type(0), then silence",
+  "springboard": "spawn 97.3 s, exec done 97.4 s"
+ },
+ "disassembly_backboardd": {
+  "0x100058980": "IOMobileFramebufferOpen is a PROBE: match AppleH1CLCD/AppleM2CLCD, open, SetDebugFlags(0x20), CFRelease, return. No surface, no frame.",
+  "0x10003587c": "IOSurfaceCreate + IOSurfaceLock + CARenderServerRenderDisplay = the screenshot path that produced screen.bgrx",
+  "imports": "no swap/commit symbol; backboardd never submits frames directly to IOFB"
+ },
+ "os_log": {
+  "tool": "mandiant/macos-UnifiedLogs unifiedlog_iterator (cargo 1.98, edition2024)",
+  "rows": 122997,
+  "backboardd_readable": "67 lines: running, INIT, failed lookup com.apple.oscard (No such process), service stubs, job state = running. No render/IOFB lines.",
+  "coreanimation": "com.apple.coreanimation/WindowServer/pid=56 entries exist but format strings are in the DSC, so all read 'Unknown shared string message'"
+ },
+ "blocker": "No local DSC source: userdata-root.img holds only the OS volume; the SystemOS window (Cryptex1,SystemOS) source is not on this machine; /mnt/iosroot dyld cache is empty; super (9.1 GB) head is all zeros. WindowServer/CoreAnimation code and format strings live in the DSC.",
+ "verdict": "Kernel-side evidence is exhausted: UI processes open IOFB, surface exists, but no frame is ever submitted; backboardd's only IOFB use is a probe and the screenshot path. The remaining question (why WindowServer never submits) is only answerable from QuartzCore/DSC, which is not present locally.",
+ "next": "fc76 to supply Cryptex1,SystemOS / DSC, or extract it from the owner private inputs; otherwise this line is blocked"
+}

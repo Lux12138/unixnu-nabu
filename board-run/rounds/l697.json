@@ -1,0 +1,62 @@
+{
+ "tag": "l697",
+ "when": "2026-11-10T12:12:38",
+ "question": "l696 已修通 surface import；此时注入 home 手势能否让 CA 提交新帧（sat/xfer 变化）并在屏上出现内容？",
+ "kernel": "efcb4c34 (= l696)",
+ "payload": "9fb5f1dc",
+ "adt": "78a6f7e9",
+ "gpu_addon": "dcd25289",
+ "trust_cache": "b1bd85cc",
+ "boot": "ead4b531",
+ "args": "699/38 (tag l697, t733-managed-rt-normal=1 保留, nabu-state-ring=10 -> nabu-touch-inject=1)",
+ "boot_at": "12:12:38",
+ "recovery_at": "12:17:07",
+ "cdc_file": "logs/l697-cdc.bin (319485 B, 合并 4 分段)",
+ "diag": {
+  "export": "logs/l697-diag-full.bin (32 MiB, count=297, bytes=29361224)",
+  "oslog": "logs/l697-v1.jsonl (107267 行, 18831 条正文)"
+ },
+ "static_rationale": "历史所有注入轮 l663/l666/l667/l668 都是 t733=False（import 被拒状态），sat=0 是必然；l696 是第一次在 import 修通后测注入。alioth 记录有触摸 swaps 76~830、无触摸 8~10。",
+ "cdc_evidence": {
+  "boot_args_confirmed": ["nabu-touch-inject=1", "t733-managed-rt-normal=1", "sheng-build-tag=l697", "nabu-state-ring 已移除"],
+  "inject_lines": [
+   "NABU TOUCH inject i=0 x=16383 y=32255 rc=0",
+   "NABU TOUCH inject i=1 x=16383 y=16383 rc=0",
+   "NABU TOUCH inject i=2 x=16383 y=16383 rc=0"
+  ],
+  "reports": "0 -> 3（注入事件确实送达）",
+  "sat": 0,
+  "xfer": 5,
+  "frames_last": "xfer=5 nswap=5 nsurf=2 sbytes=16384000 nok=5 ncpy=5 nret=5",
+  "frames_total_lines": 10,
+  "panic": 0,
+  "surface_import_refused": 0
+ },
+ "oslog_key_counts": {
+  "surface import refused": 0,
+  "HostMemory": 0,
+  "NotRepresentable": 0,
+  "no device answer": 6,
+  "CARenderServerStart": 0,
+  "CADisplayLink": 0,
+  "Metal failed to load binary archive": 1,
+  "Migration failed": 9,
+  "SIGTRAP": 24
+ },
+ "screen": {
+  "file": "logs/l697-diag-tree/screen.bgrx",
+  "result": "800x1280: 1013745 黑 + 9964 白, 非黑像素 10255",
+  "comparison": "与 l690 逐字节完全相同 (sha ca18b728a7def68e), 白色 bbox x=344..456 y=550..688 (113x139) = iBoot 苹果 Logo 残留",
+  "vs_l696": "l696 是全屏 (0,0,0,255) 纯黑(blank swap 覆盖了 Logo)；l697 恢复了 Logo 残留",
+  "interpretation": "不是 UI 出现。是 ABL 留下的静态帧缓冲内容没被 blank swap 覆盖。差异来自 nabu-state-ring 换成 inject 后的时序/快照时刻变化，不是触摸触发了绘制。"
+ },
+ "verdict": "NEGATIVE（有明确信息）。注入 3 帧全部 rc=0、reports 0->3 证明事件送达 backboardd，但 sat=0、xfer/frames 冻结在 5。这是在 import 修通的新状态下第一次测注入，结论比历史轮更强：断点确定在 CA render server / display link 未进入帧提交循环，不在触摸送达、不在 surface import、不在显示驱动。",
+ "ruled_out": [
+  "触摸没送到：inject 3 帧 rc=0 + reports 3 已证伪",
+  "surface import 被拒：l696/l697 都是 0（本轮 os_log 再次确认）",
+  "屏上出现 UI：l697 的 10255 非黑像素与 l690 逐字节相同，是 iBoot Logo 残留",
+  "backboardd 崩溃：本轮无；系统正常回 TWRP"
+ ],
+ "next": "不再做触摸/参数单变量实验。转向离线查 CA render server 的建立条件：backboardd 已建 CAWindowServerDisplay(1600x2560) 且连上 IOMFB(census2 cl=2)，却没有 CARenderServerStart/CADisplayLink。要查：① CAWindowServer 的 serverIfRunning/displays 状态；② CAEnableDeepFramebuffer=false 是否导致软件回退路径中断；③ vsync 时钟源（l684 已证 sheng-vsync=60 单独不改 frames，不可当单参数解药）；④ ios-sweet/alioth 是否用别的机制启动 render server。",
+ "honest_caveat": "l697 的屏与 l690 逐字节相同是 iBoot Logo 残留，不是 UI。本轮的价值是否定结论（把断点收敛到 CA），不是开机进展。"
+}

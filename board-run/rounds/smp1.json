@@ -1,0 +1,11 @@
+{
+ "ts": "2026-11-04T06:45:29",
+ "pkg": "smp-arm",
+ "payload_sha": "686d0afdd1b509b594bec1392e37a414c0fb306c1f5c19863a8fa5ec16e2897d",
+ "tag": "smp1",
+ "ok": false,
+ "error": "stale ring: round hung before NativeUfs wrote the log; the t=364.4 line belongs to the previous round (l523w4). PON after self-recovery = 0x40001",
+ "t_s": 364.4,
+ "state_line": null,
+ "fields": {}
+}

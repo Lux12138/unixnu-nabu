@@ -1,0 +1,19 @@
+{
+ "tag": "l692",
+ "when": "2026-11-07T10:29Z",
+ "kernel": "113731f6",
+ "payload": "3b0268f3",
+ "adt": "167e32fb",
+ "args": "693/38 (+mac-vnode-enforce=0, -cs_enforcement_disable)",
+ "boot_at": "10:24:14",
+ "recovery_at": "10:29:33",
+ "seconds_to_recovery": 319,
+ "pon": "0x40001",
+ "nabulog_bytes": 19982,
+ "frames_lines": 0,
+ "last_lines": ["Log queues configured: slot count: 64, per-slot size: 32768, total size: 2097152", "OSLog stream configured: stream: 8192 bytes,"],
+ "panic": null,
+ "verdict": "EARLY HANG, no panic. 19,982 B of kernel log, stopping right after 'OSLog stream configured' - earlier than l688 (20,442 B, stopped at lockdown_mode). The only new code is STARTUP(CODESIGNING, STARTUP_RANK_FIRST, mac_vnode_enforce_init), which runs exactly in this window. mac_vnode_enforce=0 itself may also make an early boot task load unsigned code and stall.",
+ "rolled_back_to": "l690 (rolled back at 10:30:24, cust payload + boot)",
+ "next": "fc76 option B: move the bypass into security/mac_vfs.c:1344 as an inline boot-arg check (cached), adding no startup function; or move the STARTUP to a later stage (IOKIT/LATE)"
+}

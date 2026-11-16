@@ -1,0 +1,30 @@
+{
+ "tag": "l736",
+ "when": "2026-11-12T07:27:31",
+ "kind": "ONE-SHOT COMBINED CAPACITY/WIMG/DIAGNOSTIC ROUND; DECISIVE-NEGATIVE / DISPLAY-DEGRADED",
+ "question": "组合 span 容量缩小、低位 WIMG 0x6->0x7 与 l734 官方 stage20/21 诊断后，能否让 GOP host import 到 stage19 并出现 P4/PF>0 / ncpy<xfer？",
+ "kernel": "e0cedf98",
+ "payload": "97150ef5",
+ "adt": "78a6f7e9",
+ "gpu_addon": "950a3968",
+ "trust_cache": "a4a6bae6",
+ "boot": "ead4b531",
+ "args": "700/39 — 与 l730 逐字节相同；added=[] dropped=[]",
+ "authorization": "用户授权 7×24 自动推进且明确『没有我的授权不允许停下来』；一次性候选轮，用完回滚，不进默认 args；零新增打印/探针、零重编、零安全放宽、不碰 boot_a。",
+ "package": {
+  "kernel_diff": "relative hold/l730 exactly 35 bytes in 3 non-overlapping instruction groups: @0xa563e8 lsr #12->#14 (span_capacity 4000->1000 / 128000B->32000B), @0xa50f34 low WIMG cmp #0x6->#0x7, @0xa56418 and @0xa564e8 l734 official stage21/stage20 diagnostics",
+  "five_others": "gpu-addon.bin/kernel.macho.adt/owner-trust.bundle/boot-merge-r3.img unchanged; payload FAT replaced only KERNEL~1.MAC",
+  "gates": {"audit_bootability": "WSL OK 0fail/0warn", "audit_dual": "12/12", "audit_args": "OK 700/39 added=[] dropped=[]", "precheck": "PASS", "precheck_check": "PASS", "board_report": "six sections PASS", "guard_no_boot_flash": "PASS"}
+ },
+ "result": {
+  "controls": "pet=600 arm=0; PON=0x80041 auto TWRP at 07:33:09; no panic/APFS/buf_bread; CDC 925780 B sha8 3e970cf8; max t=310.9 s; seq0 and seq1 both pulled 38502400 B",
+  "exact_stage": "import_stage=21 x18; import_stage=20/19/18/17=0; fail_pa=0. Therefore even after reducing span_capacity to 1000 / allocation to 32000B, IONewData still returns NULL. The WIMG compare and diagnostic split were never reached.",
+  "p3": "P3 e0 x18; P4/PF/PX=0; no-copy buffer refused x10; host import reason=10 status=c4641cbd; no ncpy<xfer",
+  "frames": "last frames xfer=5 nswap=5 nsurf=2 sbytes=16384000 nok=5 ncpy=5 nret=5 fingers=0; CPU copy remains",
+  "screen": "seq1 screen.bgrx sha8 1d692f17 is 800x1280 all zero (pure black); display degraded",
+  "safety": "device back in TWRP f91fa664; boot_a untouched; WDT auto recovery"
+ },
+ "verdict": "DECISIVE-NEGATIVE / DISPLAY-DEGRADED: l736 proves that a 32000B allocation still fails in this board's kalloc/KHEAP_DATA_BUFFERS context and that combining a low-branch WIMG compare with diagnostics cannot bypass an earlier IONewData failure. This overturns the interim interpretation that l735 had cleared the allocation gate. Stop binary capacity/WIMG guess patches; the only remaining credible route is the isolated source-level two-pass / exact merged-span rebuild, which must allocate a small array after counting real merged spans and/or use a safe large-allocation path. One-shot only; best verified package remains hold/l730.",
+ "next": "Use /root/merge/l736-rebuild isolated root (already verified byte-identical NativeAdrenoMemory.o reproduction) to implement importTask() two-pass scan / exact merged-span capacity. Recompile only NativeAdrenoMemory.o, replace it in libAdreno740.a, relink kernel, replay the 204-byte l730 patch ledger, and run full package gates. Do not create another one-byte capacity/WIMG round.",
+ "rollback": "hold/l730; cust and misc restored immediately after the round and re-verified byte-for-byte (cust sha256 3876e1a2..., misc b9f0f5a5...)."
+}

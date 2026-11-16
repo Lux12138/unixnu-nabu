@@ -1,0 +1,38 @@
+{
+ "tag": "l731",
+ "when": "2026-11-12T02:45:00",
+ "kind": "ONE-SHOT TEMPORARY PERFORMANCE ROUND (user-authorized automatic progression); MECHANISM-POSITIVE / SUBJECTIVE-NO-GO",
+ "question": "在 l730 已现场确认锁屏可见/触摸有效但很卡的前提下，静音占复现 CDC 26.1% 的 2,661 条无条件 spawn/exec printf，能否减少串口/日志环/锁开销，使同一滑动动作对应的 xfer/nswap 帧增长更快或用户主观更流畅，同时仍到锁屏、触摸有效、自动回 TWRP？",
+ "kernel": "e6e59357",
+ "payload": "1a9aabc5",
+ "adt": "78a6f7e9",
+ "gpu_addon": "950a3968",
+ "trust_cache": "a4a6bae6",
+ "boot": "ead4b531",
+ "args": "700/39 — 与 l730/l727/l723 逐字节相同；added=[] dropped=[]",
+ "boot_at": "02:34:10",
+ "recovery_at": "02:39:59 (CDC watcher done) / 02:40:0x (slot pull)",
+ "cdc_file": "logs/l731-cdc-merged.bin (850,075 B; 单段 cdc-023438.bin 0–336.9 s)",
+ "diag": {
+  "seq0": "base=124307451 bytes=30102537 wrote=30105600 files=292 skipped=1 errors=0",
+  "seq1": "base=124340219 bytes=38484455 wrote=38486016 files=402 skipped=1 errors=0",
+  "seq0_full": "logs/l731-diag-seq0-full.bin (38,502,400 B, sha8 ab068d7d)",
+  "seq1_full": "logs/l731-diag-seq1-full.bin (38,502,400 B, sha8 b7aae25a)"
+ },
+ "authorization": "用户授权 7×24 自动推进到能开机/临时性能轮；一次性临时轮、用完回滚、不进默认 args；零新增打印/探针、零重编、零安全放宽、不碰 boot_a。",
+ "result": {
+  "patch": "相对 l730 d3598dd6 仅 4 文件字节：@0x10ff15/@0x10ffd9/@0x1102de/@0x110473 四条 nabu: spawn>/spawn err=/exec>/exec done printf 格式串首字节→NUL。printf 调用、os_log_with_args 空串早退、nabuLogThread 每 2 秒独立 pet、4KiB 日志环 pet 钩子、WDT 截止、args 700/39、五文件其余产物、APFS nop、pet600、diagAt0/1=220/300、migratx、migratiox.plist、norceMigrationOnNextReboot 全保留；全套门禁与六问板报 PASS",
+  "static_closed": "owner-trust.bundle l718–l730 恒 a4a6bae6 而 kernel 每轮变；25 LC 无 LC_CODE_SIGNATURE；__TEXT 覆盖 0..0x1b4000。libkern/os/log.c:769-784 对 fmt[0]=='\\0' 明确 counter_inc(error_count); return；osfmk/kern/printf.c:241-270 __doprnt 空串不输出不读参数。NativeUfs.cpp:4090-4127 nabuLogThread 每 2s IOSleep→lg:tick→nabu_wdt_pet，:3265-3298 pet/gWdtPetUntil，:3292 nabu_log_service_4k；llvm-nm 板上符号齐全。静音只减少 4KiB 边界 pet，独立 2s pet 与 pet=600 不变",
+  "mechanism_positive": "CDC 启动回显 NativeUfs: args ... pet=600 arm=0；nabu: skip-read i=4 rc=0 sz=365 keys=LastSystemVersion,DMUserDataDisposition,SyntheticDidUpgrade,buildVersion；nabu: skip-read ok=5/5 full=5/5 sz_eq=5/5 eq=5/5 gset=5/5；data tree attr=49 attrfail=0；sheng-mig: sentinel=0 prefs=0 err=0 / readback rc=0 fsz=0。nabu: spawn>/exec>/exec done/spawn err= 全程 0 命中，四条格式串静音生效；NABU TOUCH status ccreator=pid 56, backboardd 保持",
+  "wdt": "pet=600 arm=0、内核 t= 到 336.9 s、双槽 220/300 s 均非 stale、PON=0x80041 内核自复位自动回 TWRP f91fa664；无 panic: / panic( / APFS unencrypted / buf_bread；无需人工长按。证明减少 nabu_log_total 字符后独立 2s WDT pet 仍保持自动回收",
+  "frames": "l731 frames 从 xfer=0→1→2→5→8→10→12，ncpy/nret 同步 0→12，fingers 241→454；l730r 对照 xfer=1@251.8s→3@272.7s→5@290.7s、fingers 4→436。静音后同期帧数约 2.4 倍，但 ncpy==xfer 证明每一帧仍走 CPU 全帧拷贝到 GOP，不是 GPU 直出",
+  "gpu": "NativeAdrenoProfile 后段 lat≈0.42–0.44s、NativeAdrenoMetal ctc≈0.43–0.56s，与 l730r 同量级；用户态 vm_map/pte_map 重开销未变。CDC 有 nabu: scanout hand-off online gop=9c000000/fa0000 1600x2560 stride=1900，但 NabuGpuScanoutHandoff::offer 要求 backboardd 客户端先注册 NGP_METHOD_WAIT_SWAP；当前 gpu-addon.bin 中 nabu_gpu_scanout_display_call/WAIT_SWAP 客户端符号 0 命中，ncpy==xfer 也证 offer 未接管",
+  "user_feedback": "用户现场反馈『还是非常非常的卡』；随后要求解释图像显示到底是 CPU 模拟还是 GPU 直出。⇒ 静音日志有客观帧计数改善，但没有解决主观流畅度，不能作为可保留的性能修复"
+ },
+ "verdict": "MECHANISM-POSITIVE / SUBJECTIVE-NO-GO：四条 spawn/exec printf 格式串静音按预期归零、锁屏/触摸/双槽/WDT 自动回收全保持，帧数从 5 提到 12，说明高频调试输出确实有开销；但用户仍感非常卡，ncpy==xfer 与 0.4s 级 GPU profile 证明主瓶颈是原生/GPU 合成后每帧 16,384,000 B 的 CPU 全帧拷贝到 GOP framebuffer，以及 GPU 显存/页表映射，不是 spawn printf。l731 一次性，不进默认 args；最佳已验证体验包仍为 hold/l730。停止『只关日志/时间闸』方向。",
+ "display_path_conclusion": "当前不是 CPU 软件模拟渲染，也不是 DPU/GPU 直出扫描：SpringBoard/backboardd/QuartzCore/NativeAdrenoMetal 做原生合成与 GPU 工作；最终帧由 NativeLegacyDisplay.cpp:749-762 的 native_legacy_copy_pixels 从 IOSurface 整帧写到 firmware GOP bootMapping，再 dsb sy 由面板扫描。sheng-fb-gpu=1 只让内核侧 hand-off online，但无 backboardd WAIT_SWAP 客户端注册，offer() 返回 0 后回落 CPU copy。sheng-dpu-scanout=2 需要 native_ufs_dpu_map/native_ufs_dpu_state 的 display-SMMU window，本移植 NativeUfs 为 weak zero stand-ins，传参也开不了；属编译侧/代码路线级缺口。要真正流畅需补 WAIT_SWAP 客户端让 GPU 接管搬帧，或补 DPU display-SMMU 窗口做 direct scanout，不是继续调 args/WDT。",
+ "next": "按一次性边界回滚/保留 hold/l730 为默认参考；不再出静音 printf、日志开关或纯时间窗轮。若继续到流畅度目标，需路线级动作：恢复编译侧同构建根并双审计，补 gpu-addon 的 NGP WAIT_SWAP/COMPLETE_SWAP 客户端或 DPU display-SMMU 实现；期间维持 boot_a 不碰、自动回 TWRP、不重编现有板上 kernel。",
+ "gates": {"audit_bootability": "OK 0fail/0warn (base l730)", "audit_dual": "7/7 equal (audit-l731.json)", "audit_args": "700/39 -> 700/39, added=[] dropped=[]", "precheck": "OK (state/precheck.json)", "board_report": "state/board-report-l731.md 六问齐全", "guard_no_boot_flash": "OK"},
+ "rollback": "hold/l730 (最佳已验证锁屏/触摸包) / hold/l727 / hold/l723 / hold/l722 / hold/l721 / hold/l720 / hold/l719 / hold/l718 / hold/l714 / hold/l700；本包一次性，不进默认 args",
+ "device_state": "TWRP f91fa664，boot_a 未碰；无 panic / APFS unencrypted / buf_bread err16"
+}

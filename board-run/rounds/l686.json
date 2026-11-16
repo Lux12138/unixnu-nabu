@@ -1,0 +1,18 @@
+{
+ "tag": "l686",
+ "when": "2026-11-07T05:19Z",
+ "kernel": "efcb4c34",
+ "payload": "84db74cc",
+ "trustcache": "7533eec8",
+ "addon": "bbdb4bc2",
+ "args": "689/38 (unchanged from l685)",
+ "boot_at": "05:10:00",
+ "recovery_at": "05:19:35",
+ "seconds_to_recovery": 575,
+ "pon": "0x40001",
+ "display": {"frames_xfer": 5, "nswap": 5, "nsurf": 2, "state": "primary=1 mapper=1 pm=1 start=1 map=5 refuse=0"},
+ "amfi_hits_in_window": 0,
+ "instrumentation_caveat": "NABULOG1 length=98304 total=330245 dropped=0; earliest visible t~271 s. The early AMFI lines (t<140 s) are pushed out of the tail window, so 0 hits is a window artifact, NOT proof that AMFI accepted.",
+ "verdict": "owner-trust payload built correctly (7/7 audit). frames moved 4 -> 5, consistent with the trust gate being cleared, but the direct AMFI lines cannot be read from the console tail window this round. frames still stuck at 5, so the next layer is plugin load/render, not trust.",
+ "next": "l687: kernel 4d6e157c (nabu-gpu-addon verdict line) + nabu-state-ring (drop offline-key-events=1). Requirement: verdict and Metal stats must go through nabu_log_puts (ring), not console window, otherwise they are pushed out again."
+}
