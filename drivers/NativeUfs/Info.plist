@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>org.blu-sharky.NativeUfs</string>
+  <key>CFBundleName</key><string>NativeUfs</string>
+  <key>CFBundleExecutable</key><string>NativeUfs</string>
+  <key>CFBundlePackageType</key><string>KEXT</string>
+  <key>CFBundleVersion</key><string>0.1.0</string>
+  <key>OSBundleRequired</key><string>Root</string>
+  <key>IOKitPersonalities</key><dict><key>sheng SM8550 UFSHCI</key><dict>
+    <key>IOClass</key><string>NativeUfs</string>
+    <key>IOProviderClass</key><string>IOPlatformDevice</string>
+    <key>IOProbeScore</key><integer>1000</integer>
+  </dict></dict>
+</dict></plist>
