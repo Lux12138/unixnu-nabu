@@ -108,6 +108,7 @@ ToHome · UI Locked:NO · 无 ForceLockKey · 主屏图标 + 壁纸 + Dock
 | `docs/screenshots/` | 实机桌面（l769）与锁屏（l730） |
 | `CURRENT-STATE.md` | **权威状态摘要，与旧文档冲突时以它为准** |
 | `DOCS-INDEX.md` | 文档索引（**只需读 README + CURRENT-STATE**） |
+| `CREDITS.md` | **参考与来源**：直接依赖的每个上游项目、参考了谁的什么思路、我们原创的是什么 |
 | `docs/history/` | 已作废的旧路线文档（2026-10-2x），仅作追溯 |
 
 ---
@@ -484,6 +485,10 @@ darwinboot-memory-size  = 0x20000000    512 MiB 连续窗口
 ---
 
 ## 七、参考
+
+**完整的来源与许可证说明见 [`CREDITS.md`](CREDITS.md)**——按「直接依赖 / 参考 / 我们原创」三类分开写清。
+
+下面只列最直接相关的几个：
 
 - [`Allenwdk/xnu-linux-toolchain`](https://github.com/Allenwdk/xnu-linux-toolchain) —— Linux 交叉工具链
 - [`1PJL/unixnu-nabu`](https://github.com/1PJL/unixnu-nabu) —— UFS 卷诊断系列（`Recover GPT` / `Build Volume` / `Repack` 三步，跑在 `ubuntu-24.04` 上）
