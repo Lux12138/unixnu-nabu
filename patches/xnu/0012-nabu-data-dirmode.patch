@@ -1,0 +1,458 @@
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -8124,3 +8124,455 @@260
+ 	if (!error) native_gpu_addon_prepare(p, scratch);
++	if (!error) {
++		/* The Data skeleton above is made with the RAM-block spec field as the
++		 * directory mode (value 1), so every level is d--x------ and owned by root.
++		 * mobile (501:501) owns its home, and a level it cannot write into breaks
++		 * every unprivileged daemon that has to create a file there. The volume is
++		 * written once and reused, so mkdir cannot repair it; modes and owners are
++		 * re-stated on every boot. */
++		static const struct {
++			const char *path;
++			int mode;
++			unsigned uid, gid;
++		} writable[] = {
++			{ "/private/var/mobile", 0755, 501, 501 },
++			{ "/private/var/mobile/Library", 0755, 501, 501 },
++			{ "/private/var/mobile/Library/Preferences", 0755, 501, 501 },
++			{ "/private/var/mobile/Library/Caches", 0755, 501, 501 },
++			{ "/private/var/mobile/Library/Logs", 0755, 501, 501 },
++			{ "/private/var/mobile/Library/Logs/CrashReporter", 0755, 501, 501 },
++			{ "/private/var/mobile/Library/Logs/DiagnosticReports", 0755, 501, 501 },
++			{ "/private/var/mobile/Containers", 0755, 501, 501 },
++			{ "/private/var/mobile/Documents", 0755, 501, 501 },
++			{ "/private/var/mobile/Media", 0755, 501, 501 },
++			{ "/private/var/mobile/tmp", 0755, 501, 501 },
++			{ "/private/var/tmp", 01777, 0, 0 },
++			{ "/private/var/root", 0700, 0, 0 },
++			{ "/private/var/preferences", 0755, 0, 0 },
++			{ "/private/var/preferences/Logging", 0755, 0, 0 },
++			{ "/private/var/logs", 0750, 0, 0 },
++			{ "/private/var/Keychains", 0755, 0, 0 },
++			{ "/private/var/MobileDevice", 0755, 0, 0 },
++			{ "/private/var/Managed Preferences", 0755, 0, 0 },
++			{ "/private/var/Managed Preferences/mobile", 0755, 501, 501 },
++			{ "/private/var/keybags", 0700, 0, 0 },
++			{ "/private/var/containers", 0755, 0, 0 },
++			{ "/private/var/backup", 0755, 0, 0 },
++			{ "/private/var/installd", 0755, 0, 0 },
++			{ "/private/var/iomfb_bics_daemon", 0755, 0, 0 },
++			{ "/private/var/hardware", 0755, 0, 0 },
++			{ "/private/var/log", 0755, 0, 0 },
++			{ "/private/var/log/com.apple.xpc.launchd", 0755, 0, 0 },
++			{ "/private/var/db", 0755, 0, 0 },
++			{ "/private/var/db/com.apple.xpc.launchd", 0755, 0, 0 },
++			{ "/private/var/vm", 0755, 0, 0 },
++			{ "/private/var/run", 0755, 0, 0 },
++			{ "/private/var/wireless", 0755, 0, 0 },
++			{ "/private/var/networkd", 0755, 0, 0 },
++			{ "/private/var/MobileSoftwareUpdate", 0755, 0, 0 },
++			{ "/private/var/MobileAsset", 0755, 0, 0 },
++			{ "/private/var/MobileDevice/ProvisioningProfiles", 0755, 0, 0 },
++			{ "/private/var/protected", 0755, 0, 0 },
++			{ "/private/var/protected/trustd", 0755, 0, 0 },
++			{ "/private/var/.fseventsd", 0700, 0, 0 },
++			{ "/private/var/.ssh", 0700, 0, 0 },
++			{ "/private/var/logs/AppleSupport", 0755, 0, 0 },
++			{ "/private/var/logs/BurnIn", 0755, 0, 0 },
++			{ "/private/var/root/Library", 0700, 0, 0 },
++			{ "/private/var/root/Library/Logs", 0700, 0, 0 },
++			{ "/private/var/root/Library/Preferences", 0700, 0, 0 },
++			{ "/private/var/root/Library/Lockdown", 0700, 0, 0 },
++			{ "/private/var/root/Library/Caches", 0700, 0, 0 },
++			{ "/private/var/root/Library/MobileContainerManager", 0700, 0, 0 },
++		};
++		{
++			extern int nabu_kern_mkdir(const char *, int);
++			(void) nabu_kern_mkdir("/private/var/preferences", 0755);
++			(void) nabu_kern_mkdir("/private/var/preferences/Logging", 0755);
++			(void) nabu_kern_mkdir("/private/var/logs", 0755);
++			(void) nabu_kern_mkdir("/private/var/Keychains", 0755);
++			(void) nabu_kern_mkdir("/private/var/MobileDevice", 0755);
++			(void) nabu_kern_mkdir("/private/var/Managed Preferences", 0755);
++			(void) nabu_kern_mkdir("/private/var/Managed Preferences/mobile", 0755);
++			(void) nabu_kern_mkdir("/private/var/keybags", 0700);
++			(void) nabu_kern_mkdir("/private/var/containers", 0755);
++			(void) nabu_kern_mkdir("/private/var/backup", 0755);
++			(void) nabu_kern_mkdir("/private/var/installd", 0755);
++			(void) nabu_kern_mkdir("/private/var/iomfb_bics_daemon", 0755);
++			(void) nabu_kern_mkdir("/private/var/hardware", 0755);
++			(void) nabu_kern_mkdir("/private/var/log", 0755);
++			(void) nabu_kern_mkdir("/private/var/log/com.apple.xpc.launchd", 0755);
++			(void) nabu_kern_mkdir("/private/var/db", 0755);
++			(void) nabu_kern_mkdir("/private/var/db/com.apple.xpc.launchd", 0755);
++			(void) nabu_kern_mkdir("/private/var/vm", 0755);
++			(void) nabu_kern_mkdir("/private/var/run", 0755);
++			(void) nabu_kern_mkdir("/private/var/wireless", 0755);
++			(void) nabu_kern_mkdir("/private/var/networkd", 0755);
++			(void) nabu_kern_mkdir("/private/var/MobileSoftwareUpdate", 0755);
++			(void) nabu_kern_mkdir("/private/var/MobileAsset", 0755);
++			(void) nabu_kern_mkdir("/private/var/MobileDevice/ProvisioningProfiles", 0755);
++			(void) nabu_kern_mkdir("/private/var/protected", 0755);
++			(void) nabu_kern_mkdir("/private/var/protected/trustd", 0755);
++			(void) nabu_kern_mkdir("/private/var/.fseventsd", 0700);
++			(void) nabu_kern_mkdir("/private/var/.ssh", 0700);
++			(void) nabu_kern_mkdir("/private/var/logs/AppleSupport", 0755);
++			(void) nabu_kern_mkdir("/private/var/logs/BurnIn", 0755);
++			(void) nabu_kern_mkdir("/private/var/root/Library", 0700);
++			(void) nabu_kern_mkdir("/private/var/root/Library/Logs", 0700);
++			(void) nabu_kern_mkdir("/private/var/root/Library/Preferences", 0700);
++			(void) nabu_kern_mkdir("/private/var/root/Library/Lockdown", 0700);
++			(void) nabu_kern_mkdir("/private/var/root/Library/Caches", 0700);
++			(void) nabu_kern_mkdir("/private/var/root/Library/MobileContainerManager", 0700);
++		}
++		/* skip-Setup: the flags a finished Setup leaves behind, so this boot goes to SpringBoard
++		 * instead of the Hello page. TWO DOMAINS, from two different sources, and they are labelled
++		 * separately on purpose:
++		 *  - github.com/dipa-studio/ios-sweet tools/sweet-root-tweaks.py, packaged by upstream
++		 *    scripts/seed-data-skip-setup.py, writes FIVE files and every one of them is in
++		 *    /private/var/mobile/Library/Preferences -- that script has no Managed Preferences file
++		 *    at all (its merge_pref() hard-codes var/'mobile/Library/Preferences').
++		 *  - the Managed Preferences/mobile/com.apple.purplebuddy.plist pair comes from a different
++		 *    community implementation (Cowabunga Lite, in leminlimez's iOS-restore write-up) and
++		 *    carries only the two SetupDone flags. It is counted as prefs_mp, never folded into the
++		 *    seed script's five.
++		 * Key names and values are copied verbatim from those sources; nothing here is invented.
++		 * l539 change: owner and mode are now restated on the vnode the write already holds
++		 * (nabu_kern_write_file_owner), because l537 proved the previous split unreadable -- all five
++		 * writes returned success while the attribute loop's own vnode_lookup() of those same paths
++		 * returned ENOENT, so file, path and attribute step could not be told apart, and 0600/501:501
++		 * never landed. The five rows are out of writable[] again for the same reason: attrfail goes
++		 * back to a clean baseline and each write reports its own errno.
++		 * The Managed Preferences/mobile directory itself is already 501:501 in writable[] (patch line
++		 * 41), so that half is verified by the absence of a new failure, not by a new row.
++		 * Upstream keeps the SBDisableAutoDim trio behind --no-auto-dim for boards with no input; this
++		 * board's touch line is still open, so leaving it out blanks the panel about 30 s after
++		 * SpringBoard starts and throws away the thing we are looking at. */
++		{
++			static const char nabu_pb[] =
++				"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
++				"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
++				"<plist version=\"1.0\"><dict>"
++				"<key>SetupDone</key><true/>"
++				"<key>SetupFinishedAllSteps</key><true/>"
++				"<key>SetupVersion</key><integer>11</integer>"
++				"<key>daemonizeNeedsToRun</key><false/>"
++				"</dict></plist>\n";
++			static const char nabu_pbnb[] =
++				"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
++				"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
++				"<plist version=\"1.0\"><dict>"
++				"<key>ShouldRunDiagnosticsMiniBuddy</key><false/>"
++				"<key>ShouldRunHSA2MiniBuddy</key><false/>"
++				"<key>ShouldRunKeychainSyncMiniBuddy</key><false/>"
++				"<key>ShouldRunMesaMiniBuddy</key><false/>"
++				"<key>ShouldRunPaymentMiniBuddy</key><false/>"
++				"<key>ShouldRunStandardMiniBuddy</key><false/>"
++				"<key>SilentICDPUpgrade</key><false/>"
++				"</dict></plist>\n";
++			static const char nabu_mcnb[] =
++				"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
++				"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
++				"<plist version=\"1.0\"><dict>"
++				"<key>LockdownActivationIndicatesCloudConfigurationAvailable</key><false/>"
++				"</dict></plist>\n";
++			static const char nabu_sb[] =
++				"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
++				"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
++				"<plist version=\"1.0\"><dict>"
++				"<key>BKNoWatchdogs</key><true/>"
++				"<key>FBLaunchWatchdogExceptions</key><dict><key>com.apple.purplebuddy</key><real>100</real></dict>"
++				"<key>MCForceShowCloudConfigurationUI</key><false/>"
++				"<key>SBDisableAutoDim</key><true/>"
++				"<key>SBDontDimOrLockOnAC</key><true/>"
++				"<key>SBDisableIdleSleep</key><true/>"
++				"</dict></plist>\n";
++			static const char nabu_mig[] =
++				"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
++				"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
++				"<plist version=\"1.0\"><dict>"
++				"<key>LastSystemVersion</key><string>21H461</string>"
++				"<key>DMUserDataDisposition</key><dict>"
++				"<key>SyntheticDidUpgrade</key><false/>"
++				"<key>buildVersion</key><string>21H461</string></dict>"
++				"</dict></plist>\n";
++			static const struct {
++				const char *path; const char *body; unsigned len; char domain;
++			} setup_skip[] = {
++				{ "/private/var/mobile/Library/Preferences/com.apple.purplebuddy.plist",
++				    nabu_pb, sizeof(nabu_pb) - 1, 'm' },
++				{ "/private/var/mobile/Library/Preferences/com.apple.purplebuddy.notbackedup.plist",
++				    nabu_pbnb, sizeof(nabu_pbnb) - 1, 'm' },
++				{ "/private/var/mobile/Library/Preferences/com.apple.managedconfiguration.notbackedup.plist",
++				    nabu_mcnb, sizeof(nabu_mcnb) - 1, 'm' },
++				{ "/private/var/mobile/Library/Preferences/com.apple.springboard.plist",
++				    nabu_sb, sizeof(nabu_sb) - 1, 'm' },
++				{ "/private/var/mobile/Library/Preferences/com.apple.migration.plist",
++				    nabu_mig, sizeof(nabu_mig) - 1, 'm' },
++				/* l584: the Managed Preferences purplebuddy row is deliberately absent;
++				 * it marked setup as managed-done and PreBoard stopped being launched. */
++			};
++			/* l559c: sheng-prefs-wipe=1 writes these six files with length 0 instead of the plist
++			 * body, which cfprefsd reads as "no value". See the round notes: this is a clear, not
++			 * a delete -- patch 0012 has no unlink primitive to call. */
++			int wipe = 0;
++			PE_parse_boot_argn("sheng-prefs-wipe", &wipe, sizeof(wipe));
++			if (wipe != 1) wipe = 0;
++			unsigned m_ok = 0, m_n = 0, p_ok = 0, p_n = 0, failed = 0;
++			const char *bad = 0;
++			int baderr = 0;
++			for (unsigned i = 0; i < sizeof(setup_skip) / sizeof(setup_skip[0]); i++) {
++				extern int nabu_kern_write_file_owner(const char *, const char *, size_t, int,
++				    uid_t, gid_t);
++				int e = nabu_kern_write_file_owner(setup_skip[i].path, setup_skip[i].body,
++				    (wipe == 1 ? 0u : setup_skip[i].len), 0600, 501, 501);
++				if (setup_skip[i].domain == 'm') {
++					m_n++;
++					if (e == 0) {
++						m_ok++;
++					}
++				} else {
++					p_n++;
++					if (e == 0) {
++						p_ok++;
++					}
++				}
++				if (e != 0) {
++					failed++;
++					if (bad == 0) {
++						bad = setup_skip[i].path;
++						baderr = e;
++					}
++				}
++				/* one line per file, path included, so "which name" is never a matter of memory */
++				printf("nabu: skip-setup w=%c z=%d err=%d %s\n", setup_skip[i].domain, wipe, e,
++				    setup_skip[i].path);
++			}
++			printf("nabu: skip-setup prefs_m=%u/%u prefs_mp=%u/%u fail=%u first=%s err=%d\n",
++			    m_ok, m_n, p_ok, p_n, failed, bad ? bad : "-", baderr);
++			/* l541 read-back. Everything above it only proves the write call returned 0. This proves
++			 * what the filesystem now reports for those same six paths: the size the vnode carries,
++			 * the key names that actually landed inside it, the first 192 bytes printed as two lines, and
++			 * a byte-for-byte compare over the shorter of (bytes read, bytes written) -- which is
++			 * the WHOLE file whenever full=6/6 says the read reached the length we wrote.
++			 * The control read comes first and costs nothing: one path that must not exist. Until it
++			 * reports ENOENT=2, a zero from the six real reads is not evidence. Nothing here adds a
++			 * counter or a per-boot flag, so it is not a probe; the buffers are static because this
++			 * runs once, on one thread, inside the Data staging. */
++			{
++				extern int nabu_kern_read_file_head(const char *, char *, size_t, size_t *,
++				    unsigned long long *, unsigned *);
++				static char hb[513];
++				static char kb[224];
++				static char p1[97], p2[97];
++				size_t got = 0;
++				unsigned long long fsz = 0;
++				unsigned gset = 0;
++				unsigned rb_ok = 0, rb_full = 0, rb_sz = 0, rb_eq = 0, rb_gset = 0;
++				const unsigned rb_n = (unsigned)(sizeof(setup_skip) / sizeof(setup_skip[0]));
++				int ctlerr = nabu_kern_read_file_head(
++				    "/private/var/mobile/Library/Preferences/com.apple.nabu-read-ctl.plist",
++				    hb, 512, &got, &fsz, &gset);
++				printf("nabu: skip-ctl rc=%d gset=%u\n", ctlerr, gset);
++				for (unsigned i = 0; i < rb_n; i++) {
++					unsigned nb, s2, cmp, kp = 0, at = 0;
++					int heq, rc = nabu_kern_read_file_head(setup_skip[i].path, hb, 512,
++					    &got, &fsz, &gset);
++					if (rc != 0) {
++						printf("nabu: skip-read i=%u rc=%d\n", i, rc);
++						continue;
++					}
++					nb = (unsigned)got;
++					cmp = (nb <= setup_skip[i].len) ? nb : setup_skip[i].len;
++					heq = (memcmp(hb, setup_skip[i].body, cmp) == 0) ? 1 : 0;
++					/* the key names are lifted out of the raw bytes before the printer touches
++					 * them, so this is what a preferences reader would walk, not what I typed */
++					kb[0] = '\0';
++					while (at + 5 <= nb) {
++						if (hb[at] == '<' && hb[at + 1] == 'k' && hb[at + 2] == 'e' &&
++						    hb[at + 3] == 'y' && hb[at + 4] == '>') {
++							unsigned s = at + 5, e = s, q;
++							while (e + 1 < nb && !(hb[e] == '<' && hb[e + 1] == '/')) {
++								e++;
++							}
++							for (q = s; q < e && kp + 1 < sizeof(kb); q++) {
++								kb[kp++] = hb[q];
++							}
++							if (kp + 1 < sizeof(kb)) {
++								kb[kp++] = ',';
++							}
++							kb[kp] = '\0';
++							at = e;
++							continue;
++						}
++						at++;
++					}
++					for (unsigned j = 0; j < 96 && j < nb; j++) {
++						const char ch = hb[j];
++						p1[j] = (ch < 0x20 || ch >= 0x7f) ? '.' : ch;
++					}
++					p1[(nb < 96) ? nb : 96] = '\0';
++					s2 = (nb > 96) ? (nb - 96) : 0;
++					if (s2 > 96) {
++						s2 = 96;
++					}
++					for (unsigned j = 0; j < s2; j++) {
++						const char ch = hb[j + 96];
++						p2[j] = (ch < 0x20 || ch >= 0x7f) ? '.' : ch;
++					}
++					p2[s2] = '\0';
++					rb_ok++;
++					if (nb == setup_skip[i].len) {
++						rb_full++;
++					}
++					if (fsz == (unsigned long long)setup_skip[i].len) {
++						rb_sz++;
++					}
++					if (gset) {
++						rb_gset++;
++					}
++					if (heq) {
++						rb_eq++;
++					}
++					printf("nabu: skip-read i=%u rc=%d sz=%llu gset=%u want=%u n=%u eq=%d keys=%s\n",
++					    i, rc, fsz, gset, setup_skip[i].len, nb, heq, kb);
++					printf("nabu: skip-read i=%u head1=%s\n", i, p1);
++					printf("nabu: skip-read i=%u head2=%s\n", i, p2);
++				}
++				printf("nabu: skip-read ok=%u/%u full=%u/%u sz_eq=%u/%u eq=%u/%u gset=%u/%u\n",
++				    rb_ok, rb_n, rb_full, rb_n, rb_sz, rb_n, rb_eq, rb_n, rb_gset, rb_n);
++			}
++		}
++		/* l563: the render server picks a 10-bit "deep" framebuffer and asks for compressed
++		 * surfaces unless a preference says otherwise, and it reads that preference when the
++		 * process starts -- before any of our code can run. The CPU present path only handles
++		 * ordinary BGRA, so without this the daemon can stay alive and still never hand a
++		 * frame over (nswap stays at its boot value). Sources, both read before writing this:
++		 * upstream scripts/add-gpu-plugin-data.py (the three keys, both homes, both files) and
++		 * drivers/AdrenoMetal/NativeAdrenoMetalPlugin.mm, whose marker 0x6Axx reads the same
++		 * key back through CFPreferencesCopyAppValue.
++		 * Written for BOTH the process domain and the global fallback, under both names the
++		 * process domain can have (a daemon without a CFBundleIdentifier falls back to its
++		 * process name), and for both users those lookups run as.
++		 * The two .GlobalPreferences files are the only ones written conditionally: that file
++		 * carries every application's fallback values, and this kernel has no unlink primitive,
++		 * so replacing it wholesale could delete settings we cannot put back. If it already has
++		 * content we keep it and say so on the line (kept=1), which is also what tells a later
++		 * reader that "no effect" was "not written" rather than "written and ignored". */
++		{
++			static const char nabu_fb[] =
++				"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
++				"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
++				"<plist version=\"1.0\"><dict>"
++				"<key>CAEnableDeepFramebuffer</key><false/>"
++				"<key>CAEnableFramebufferCompression</key><false/>"
++				"<key>CAEnableIOSurfaceCompression</key><false/>"
++				"</dict></plist>\n";
++			static const struct {
++				const char *path; unsigned uid, gid; int keepIfPresent;
++			} fb_prefs[] = {
++				{ "/private/var/mobile/Library/Preferences/backboardd.plist", 501, 501, 0 },
++				{ "/private/var/mobile/Library/Preferences/com.apple.backboardd.plist", 501, 501, 0 },
++				{ "/private/var/mobile/Library/Preferences/.GlobalPreferences.plist", 501, 501, 1 },
++				{ "/private/var/root/Library/Preferences/backboardd.plist", 0, 0, 0 },
++				{ "/private/var/root/Library/Preferences/com.apple.backboardd.plist", 0, 0, 0 },
++				{ "/private/var/root/Library/Preferences/.GlobalPreferences.plist", 0, 0, 1 },
++			};
++			extern int nabu_kern_read_file_head(const char *, char *, size_t, size_t *,
++			    unsigned long long *, unsigned *);
++			unsigned fb_ok = 0, fb_kept = 0, fb_n = 0;
++			for (unsigned i = 0; i < sizeof(fb_prefs) / sizeof(fb_prefs[0]); i++) {
++				extern int nabu_kern_write_file_owner(const char *, const char *, size_t, int,
++				    uid_t, gid_t);
++				unsigned long long fsz = 0;
++				size_t got = 0;
++				unsigned gset = 0;
++				int kept = 0;
++				if (fb_prefs[i].keepIfPresent) {
++					/* That helper refuses out==NULL and cap==0 with EINVAL, so the probe
++					 * passes a real one-byte buffer; it only needs the attributes. A
++					 * non-zero error (ENOENT) means "not there, safe to create". */
++					static char fbprobe[1];
++					int rc = nabu_kern_read_file_head(fb_prefs[i].path, fbprobe,
++					    sizeof(fbprobe), &got, &fsz, &gset);
++					if (rc == 0 && fsz > 0) kept = 1;
++				}
++				int e = kept ? 0 : nabu_kern_write_file_owner(fb_prefs[i].path, nabu_fb,
++				    sizeof(nabu_fb) - 1, 0644, fb_prefs[i].uid, fb_prefs[i].gid);
++				fb_n++;
++				if (e == 0) fb_ok++;
++				if (kept) fb_kept++;
++				printf("nabu: fbprefs kept=%d err=%d %s\n", kept, e, fb_prefs[i].path);
++			}
++			printf("nabu: fbprefs ok=%u/%u kept=%u\n", fb_ok, fb_n, fb_kept);
++		}
++		unsigned attr_ok = 0, attr_fail = 0;
++		const char *badPath = 0;
++		int badError = 0;
++		for (unsigned i = 0; i < sizeof(writable) / sizeof(writable[0]); i++) {
++			struct vnode_attr va;
++			vfs_context_t ctx = vfs_context_kernel();
++			vnode_t vp = NULLVP;
++			int lookerr = vnode_lookup(writable[i].path, 0, &vp, ctx);
++			if (lookerr != 0) {
++				attr_fail++;
++				if (badPath == 0) { badPath = writable[i].path; badError = lookerr; }
++				continue;
++			}
++			VATTR_INIT(&va);
++			VATTR_SET(&va, va_mode, writable[i].mode);
++			VATTR_SET(&va, va_uid, (uid_t)writable[i].uid);
++			VATTR_SET(&va, va_gid, (gid_t)writable[i].gid);
++			int seterr = vnode_setattr(vp, &va, ctx);
++			if (seterr == 0) {
++				attr_ok++;
++			} else {
++				attr_fail++;
++				if (badPath == 0) { badPath = writable[i].path; badError = seterr; }
++			}
++			vnode_put(vp);
++		}
++		printf("nabu: data tree attr=%u attrfail=%u first=%s err=%d\n",
++			    attr_ok, attr_fail, badPath ? badPath : "-", badError);
++		/* l615: re-arm datamigrator's own trigger, gated on sheng-mig=1. The sentinel is the
++		 * lever: the migrator removes /private/var/datamigrator/migrate once migration finishes,
++		 * which is why a page shown once never comes back. The preference is secondary and must
++		 * never be able to stop the boot -- this block has no return value and never panics, so a
++		 * failed write here is a printf, exactly like the preference writes above it. Both writes
++		 * truncate, so a second boot with the same token produces the same two files. */
++		{
++			int mig = 0;
++			PE_parse_boot_argn("sheng-mig", &mig, sizeof(mig));
++			if (mig == 1) {
++				static const char nabu_mig_force[] =
++					"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
++					"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
++					"<plist version=\"1.0\"><dict>"
++					"<key>forceMigrationOnNextReboot</key><true/>"
++					"<key>runSetupAssistant</key><true/>"
++					"</dict></plist>\n";
++				extern int nabu_kern_mkdir(const char *, int);
++				extern int nabu_kern_write_file_owner(const char *, const char *, size_t, int,
++				    uid_t, gid_t);
++				extern int nabu_kern_read_file_head(const char *, char *, size_t, size_t *,
++				    unsigned long long *, unsigned *);
++				int md = nabu_kern_mkdir("/private/var/datamigrator", 0755);
++				int sent = nabu_kern_write_file_owner("/private/var/datamigrator/migrate", "", 0,
++				    0644, 0, 0);
++				int prefs = nabu_kern_write_file_owner(
++				    "/private/var/mobile/Library/Preferences/com.apple.migration.plist",
++				    nabu_mig_force, sizeof(nabu_mig_force) - 1, 0600, 501, 501);
++				/* read-back of the sentinel: rc=0 with fsz=0 proves an empty file exists, which is
++				 * what the migrator tests for; a non-zero rc means the write did not land. */
++				static char mig_buf[8];
++				size_t mig_got = 0;
++				unsigned long long mig_fsz = 0;
++				unsigned mig_gset = 0;
++				int mig_rb = nabu_kern_read_file_head("/private/var/datamigrator/migrate", mig_buf,
++				    sizeof(mig_buf), &mig_got, &mig_fsz, &mig_gset);
++				printf("sheng-mig: sentinel=%d prefs=%d err=%d\n", sent, prefs,
++				    (md != 0 && md != 17) ? md : 0);
++				printf("sheng-mig: readback rc=%d fsz=%llu\n", mig_rb, mig_fsz);
++			}
++		}
++	}
+ 	if (!error) native_staged_apps_prepare(p, scratch, data_mount);
+ done:

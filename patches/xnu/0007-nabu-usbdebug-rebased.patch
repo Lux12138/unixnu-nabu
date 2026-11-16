@@ -1,0 +1,142 @@
+diff --git a/osfmk/console/serial_console.c b/osfmk/console/serial_console.c
+index e6d38d3..0066f83 100644
+--- a/osfmk/console/serial_console.c
++++ b/osfmk/console/serial_console.c
+@@ -46,6 +46,9 @@
+ #include <kern/cpu_data.h>
+ #include <kern/sched_prim.h>
+ #include <libkern/section_keywords.h>
++#if XNU_QCOM_USB_DEBUG
++#include <QcomXnuUsbDebug.h>
++#endif
+ 
+ #if __arm64__
+ #include <machine/machine_routines.h>
+@@ -529,6 +532,16 @@ console_write(char *str, int size)
+ 
+ 	assert(str != NULL);
+ 
++#if XNU_QCOM_USB_DEBUG
++	/* Capture raw formatted bytes before the ring can reject them. */
++	for (int offset = 0; offset < size;) {
++		int bytes = size - offset;
++		if (bytes > 16384) { bytes = 16384; }
++		(void)qcom_usb_debug_write(str + offset, (size_t)bytes);
++		offset += bytes;
++	}
++#endif
++
+ 	char *write_ptr = NULL;
+ 	int chunk_size = CPU_CONS_BUF_SIZE;
+ 	int i = 0;
+@@ -612,6 +625,9 @@ console_write_unbuffered(char c)
+ 		return;
+ 	}
+ 
++#if XNU_QCOM_USB_DEBUG
++	qcom_usb_debug_putc(c);
++#endif
+ 	_cnputc(c, true);
+ }
+ 
+diff --git a/pexpert/arm/pe_kprintf.c b/pexpert/arm/pe_kprintf.c
+index 65144c7..4962b2c 100644
+--- a/pexpert/arm/pe_kprintf.c
++++ b/pexpert/arm/pe_kprintf.c
+@@ -12,6 +12,10 @@
+ #include <kern/simple_lock.h>
+ #include <os/log_private.h>
+ #include <libkern/section_keywords.h>
++#if XNU_QCOM_USB_DEBUG
++#include <QcomXnuUsbDebug.h>
++#endif
++
+ 
+ /* Globals */
+ typedef void (*PE_kputc_t)(char);
+@@ -26,6 +30,24 @@ SECURITY_READ_ONLY_LATE(bool) disable_kprintf_output = true;
+ SECURITY_READ_ONLY_LATE(bool) disable_iolog_serial_output = false;
+ SECURITY_READ_ONLY_LATE(bool) enable_dklog_serial_output = false;
+ 
++#if XNU_QCOM_USB_DEBUG
++static bool qcom_usb_debug_kprintf_requested;
++static void
++qcom_usb_tee(char c)
++{
++	/* The fallback console sink performs its own raw USB tee. */
++	if (PE_kputc == console_write_unbuffered) {
++		PE_kputc(c);
++		return;
++	}
++	qcom_usb_debug_putc(c);
++	if (PE_kputc && PE_kputc != qcom_usb_debug_putc) PE_kputc(c);
++}
++#define QCOM_USB_DEBUG_KPRINTF_PUTC qcom_usb_tee
++#else
++#define QCOM_USB_DEBUG_KPRINTF_PUTC PE_kputc
++#endif
++
+ static SIMPLE_LOCK_DECLARE(kprintf_lock, 0);
+ 
+ static void serial_putc_crlf(char c);
+@@ -50,6 +72,11 @@ PE_init_kprintf_config(void)
+ 		disable_kprintf_output = false;
+ 	}
+ #endif
++#if XNU_QCOM_USB_DEBUG
++	/* Defer requested verbose output until the early sink is installed. */
++	qcom_usb_debug_kprintf_requested = !disable_kprintf_output;
++	disable_kprintf_output = true;
++#endif
+ }
+ // Do this early, so other code can depend on whether kprintf is enabled.
+ STARTUP(TUNABLES, STARTUP_RANK_LAST, PE_init_kprintf_config);
+@@ -68,6 +95,30 @@ PE_init_kprintf(void)
+ 		 */
+ 		PE_kputc = console_write_unbuffered;
+ 	}
++#if XNU_QCOM_USB_DEBUG
++	{
++		int usb_debug = qcom_usb_debug_init();
++		struct qcom_usb_debug_status usb_status;
++		qcom_usb_debug_get_status(&usb_status);
++		printf("[usbdbg] init=%d phase=%u err=%u qc=%u iofail=%u diag=%u prep=%u stage=%u rb=%08x\n",
++		    usb_debug, usb_status.phase, usb_status.error,
++		    usb_status.qcom_result, usb_status.io_failed, usb_status.diag_checkpoint,
++		    usb_status.prepare_result, usb_status.prepare_stage, usb_status.prepare_readback);
++		printf("[usbdbg2] dmapa=%llx aw=%u dr=%d ds=%u asid=%x bank=%08x la=%llx le=%llx lr=%llx lt=%u tr=%u ta=%08x tb=%08x\n",
++		    (unsigned long long)usb_status.dma_pa, usb_status.dma_address_width,
++		    (int)usb_status.domain_result, usb_status.domain_stage, usb_status.domain_asid,
++		    usb_status.domain_bank,
++		    (unsigned long long)usb_status.domain_last_address,
++		    (unsigned long long)usb_status.domain_last_expected,
++		    (unsigned long long)usb_status.domain_last_readback,
++		    usb_status.last_trace, usb_status.traces,
++		    usb_status.trace_a, usb_status.trace_b);
++		if (usb_debug) {
++			PE_kputc = qcom_usb_debug_putc;
++		}
++	}
++	disable_kprintf_output = !qcom_usb_debug_kprintf_requested;
++#endif
+ }
+ STARTUP(KPRINTF, STARTUP_RANK_FIRST, PE_init_kprintf);
+ 
+@@ -78,7 +129,7 @@ _kprintf(const char *format, ...)
+ 	va_list         listp;
+ 
+ 	va_start(listp, format);
+-	_doprnt_log(format, &listp, PE_kputc, 16);
++	_doprnt_log(format, &listp, QCOM_USB_DEBUG_KPRINTF_PUTC, 16);
+ 	va_end(listp);
+ }
+ #define MP_DEBUG_KPRINTF(x...)  _kprintf(x)
+@@ -121,7 +172,7 @@ kprintf(const char *fmt, ...)
+ 			cpu_last_locked = cpu_number();
+ 		}
+ 
+-		_doprnt_log(fmt, &listp, PE_kputc, 16);
++		_doprnt_log(fmt, &listp, QCOM_USB_DEBUG_KPRINTF_PUTC, 16);
+ 
+ 		simple_unlock(&kprintf_lock);
+ 

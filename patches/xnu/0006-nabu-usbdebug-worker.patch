@@ -1,0 +1,236 @@
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
+@@ -109,6 +109,12 @@
+ #include <kern/zalloc.h>
+ #include <kern/ux_handler.h>            /* for ux_handler_setup() */
+ #include <kern/sched_hygiene.h>
++#if XNU_QCOM_USB_DEBUG
++#include <QcomXnuUsbDebug.h>
++#include <kern/cpu_number.h>
++#include <kern/processor.h>
++#include <kern/debug.h>
++#endif
+ 
+ #if (DEVELOPMENT || DEBUG)
+ #include <kern/debug.h>
+@@ -1268,11 +1274,220 @@
+ 	lock_trace = 1;
+ }
+ 
++#if XNU_QCOM_USB_DEBUG
++/* These real Mach-private declarations (kern/sched_prim.h and kern/thread.h)
++ * are hidden from BSD_BUILD; keep their exact Darwin22 prototypes here rather
++ * than changing the BSD translation unit's MACH_KERNEL_PRIVATE header ABI.
++ */
++extern processor_t thread_bind(processor_t processor);
++extern void thread_terminate_self(void);
++
++/* Late scheduler service for the existing core: no new device initialization,
++ * DMA allocation, IRQ handler, filesystem or display-driver dependency.
++ * States: 0 unstarted, 1 creating, 2 running, 3 start/bind failure, 4 stopped.
++ */
++static unsigned int qcom_usb_worker_state;
++static volatile kern_return_t qcom_usb_worker_start_result;
++/* Reboot states: 0 unstarted, 1 creating, 2 active, 3 start failure, 4 ended. */
++static unsigned int qcom_usb_reboot_state;
++
++static void
++qcom_usb_worker_wait(void)
++{
++	uint64_t deadline;
++
++	/* Unlike delay_for_interval, this never selects a CPU-latency spin path.
++	 * Called with normal thread preemption/interrupt state, outside USB guards.
++	 */
++	clock_interval_to_deadline(5, NSEC_PER_MSEC, &deadline);
++	if (assert_wait_deadline((event_t)&qcom_usb_worker_state,
++	    THREAD_UNINT, deadline) == THREAD_WAITING) {
++		thread_block(THREAD_CONTINUE_NULL);
++	}
++}
++
++/* The USB worker remains live while this separate normal thread waits for the
++ * acknowledged frame and queued console bytes to leave the CDC transport.
++ * It reaches reboot_kernel through the regular APFS sync/unmount path.
++ */
++static void
++qcom_usb_reboot_worker(void *argument __unused, wait_result_t result __unused)
++{
++	processor_t processor = cpu_to_processor(master_cpu);
++	int reboot_result;
++
++	thread_set_thread_name(current_thread(), "qcom-usb-reboot");
++	if (processor == PROCESSOR_NULL) {
++		qcom_usb_debug_control_reboot_failed(-1);
++		goto out;
++	}
++	thread_bind(processor);
++	thread_block(THREAD_CONTINUE_NULL);
++	if (cpu_number() != master_cpu) {
++		qcom_usb_debug_control_reboot_failed(-2);
++		goto out;
++	}
++	if (!qcom_usb_debug_wait_drained(2000)) {
++		qcom_usb_debug_control_reboot_failed(-3);
++		goto out;
++	}
++	if (!qcom_usb_debug_control_arm_reboot()) {
++		qcom_usb_debug_control_reboot_failed(-4);
++		goto out;
++	}
++	reboot_result = reboot_kernel(0, NULL);
++	/* reboot_kernel only returns on failure; clear the request and report it. */
++	qcom_usb_debug_control_reboot_failed(reboot_result ? reboot_result : -5);
++
++out:
++	__atomic_store_n(&qcom_usb_reboot_state, 4u, __ATOMIC_RELEASE);
++	thread_bind(PROCESSOR_NULL);
++	thread_terminate_self();
++}
++
++static void
++qcom_usb_start_reboot_once(void)
++{
++	thread_t thread = THREAD_NULL;
++	unsigned int state, running = 1u;
++	kern_return_t result;
++
++	if (!qcom_usb_debug_control_take_reboot()) {
++		return;
++	}
++	for (;;) {
++		state = __atomic_load_n(&qcom_usb_reboot_state, __ATOMIC_ACQUIRE);
++		if (state != 0u && state != 3u && state != 4u) {
++			/* A live request remains strictly single-instance. A previous
++			 * completed failure (3/4) is safe to reuse for a fresh request.
++			 */
++			qcom_usb_debug_control_reboot_failed(-6);
++			return;
++		}
++		if (__atomic_compare_exchange_n(&qcom_usb_reboot_state, &state, 1u,
++		    0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) break;
++	}
++	result = kernel_thread_start(qcom_usb_reboot_worker, NULL, &thread);
++	if (result == KERN_SUCCESS) {
++		/* The child can finish before this parent update. A successful CAS
++		 * records the live request; a failed CAS retains the child's terminal
++		 * state so a later accepted request can safely retry.
++		 */
++		(void)__atomic_compare_exchange_n(&qcom_usb_reboot_state, &running,
++		    2u, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
++		thread_deallocate(thread);
++	} else {
++		__atomic_store_n(&qcom_usb_reboot_state, 3u, __ATOMIC_RELEASE);
++		qcom_usb_debug_control_reboot_failed(result);
++		kprintf("QCOM USB REBOOT start failed kr=%d\n", result);
++	}
++}
++
++static void
++qcom_usb_worker(void *argument __unused, wait_result_t result __unused)
++{
++	struct qcom_usb_debug_status status = {0};
++	processor_t processor = cpu_to_processor(master_cpu);
++	int control_enabled = 0;
++	int control_active = 0;
++
++	thread_set_thread_name(current_thread(), "qcom-usb-debug");
++	/* Match sched_prim.c's master-processor binding and migration sequence.
++	 * The master CPU need not be logical CPU zero on a future SMP handoff.
++	 */
++	if (processor == PROCESSOR_NULL) {
++		__atomic_store_n(&qcom_usb_worker_state, 3u, __ATOMIC_RELEASE);
++		kprintf("QCOM USB WORKER master processor missing cpu=%d\n", master_cpu);
++		goto stopped;
++	}
++	thread_bind(processor);
++	thread_block(THREAD_CONTINUE_NULL);
++	if (cpu_number() != master_cpu) {
++		__atomic_store_n(&qcom_usb_worker_state, 3u, __ATOMIC_RELEASE);
++		kprintf("QCOM USB WORKER bind failed cpu=%d master=%d\n", cpu_number(), master_cpu);
++		goto stopped;
++	}
++
++	qcom_usb_debug_get_status(&status);
++	if (status.phase != QCOM_USB_DEBUG_ACTIVE) {
++		kprintf("QCOM USB WORKER unavailable phase=%u error=%u\n", status.phase, status.error);
++		goto stopped;
++	}
++	__atomic_store_n(&qcom_usb_worker_state, 2u, __ATOMIC_RELEASE);
++	kprintf("QCOM USB WORKER active cpu=%d period_ms=5 buffer=%llu\n",
++	    cpu_number(), status.buffer_capacity);
++	/* The short boot argument is evaluated only here, in the normal worker
++	 * context. Default profiles install no callback and consume no action.
++	 */
++	if (PE_parse_boot_argn("qcom-usb-ctl", &control_enabled, sizeof(control_enabled)) &&
++	    control_enabled == 1) {
++		if (!qcom_usb_debug_control_start()) {
++			kprintf("QCOM USB CONTROL unavailable\n");
++		} else {
++			control_active = 1;
++			qcom_usb_debug_get_status(&status);
++			kprintf("QCOM USB CONTROL active hook=%u\n", status.control_hook_owned);
++		}
++	}
++	for (;;) {
++		/* The panic hook retains its separate bounded polling drain. */
++		if (panic_active()) {
++			break;
++		}
++		qcom_usb_debug_get_status(&status);
++		if (status.phase != QCOM_USB_DEBUG_ACTIVE) {
++			break;
++		}
++		qcom_usb_debug_poll();
++		if (control_active) {
++			qcom_usb_start_reboot_once();
++		}
++		qcom_usb_worker_wait();
++	}
++
++stopped:
++	if (__atomic_load_n(&qcom_usb_worker_state, __ATOMIC_ACQUIRE) != 3u) {
++		__atomic_store_n(&qcom_usb_worker_state, 4u, __ATOMIC_RELEASE);
++	}
++	thread_bind(PROCESSOR_NULL);
++	thread_terminate_self();
++}
++
++static void
++qcom_usb_start_worker_once(void)
++{
++	thread_t thread = THREAD_NULL;
++	unsigned int expected = 0;
++	int enabled = 0;
++	kern_return_t result;
++
++	if (!PE_parse_boot_argn("qcom-usb-debug", &enabled, sizeof(enabled)) || enabled != 1) {
++		return;
++	}
++	if (!__atomic_compare_exchange_n(&qcom_usb_worker_state, &expected, 1u,
++	    0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
++		return;
++	}
++	result = kernel_thread_start(qcom_usb_worker, NULL, &thread);
++	qcom_usb_worker_start_result = result;
++	if (result == KERN_SUCCESS) {
++		thread_deallocate(thread);
++	} else {
++		__atomic_store_n(&qcom_usb_worker_state, 3u, __ATOMIC_RELEASE);
++		/* A logger worker failure must not panic or abort the iOS startup. */
++		kprintf("QCOM USB WORKER start failed kr=%d\n", result);
++	}
++}
++#endif /* XNU_QCOM_USB_DEBUG */
++
+ kern_return_t
+ bsd_autoconf(void)
+ {
+ 	kprintf("bsd_autoconf: calling kminit\n");
+ 	kminit();
++#if XNU_QCOM_USB_DEBUG
++	qcom_usb_start_worker_once();
++#endif
+ 
+ 	/*
+ 	 * Early startup for bsd pseudodevices.

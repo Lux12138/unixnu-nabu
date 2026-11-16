@@ -1,0 +1,370 @@
+diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
+index 58001de..2bbaf81 100644
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
+@@ -1,3 +1,4 @@
++#include <kern/boot_progress.h>
+ /*
+  * Copyright (c) 2000-2021 Apple Inc. All rights reserved.
+  *
+@@ -572,6 +573,7 @@ native_mobile_graphics_load_probe(void)
+ void
+ bsd_init(void)
+ {
++	boot_progress_stage("bsd_init enter");
+ 	struct uthread *ut;
+ 	vnode_t init_rootvnode = NULLVP;
+ 	struct proc_ro_data kernproc_ro_data = {
+@@ -591,7 +593,7 @@ bsd_init(void)
+ #if DEBUG_BSDINIT
+ #define bsd_init_kprintf(x, ...) kprintf("bsd_init: " x, ## __VA_ARGS__)
+ #else
+-#define bsd_init_kprintf(x, ...)
++#define bsd_init_kprintf(x, ...) boot_progress_stage("bsd_init: " x)
+ #endif
+ 
+ 	throttle_init();
+@@ -1013,7 +1015,9 @@ bsd_init(void)
+ #endif
+ 
+ 		bsd_init_kprintf("vfs_mountroot\n");
++		boot_progress_stage("vfs_mountroot enter");
+ 		if (0 == (err = vfs_mountroot())) {
++			boot_progress_stage("vfs_mountroot mounted; authentication pending");
+ 			break;
+ 		}
+ 		rootdevice[0] = '\0';
+@@ -1106,6 +1110,7 @@ bsd_init(void)
+ 				extern void native_owner_root_accepted_checkpoint(int, int);
+ 				native_owner_root_accepted = owner_authorized;
+ 				native_owner_root_accepted_checkpoint(autherr, owner_authorized);
++				boot_progress_stage("root authentication decision recorded");
+ 			}
+ #endif
+ 		}
+diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+index bcdc36a..3578bcd 100644
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -1,3 +1,4 @@
++#include <kern/boot_progress.h>
+ /*
+  * Copyright (c) 2000-2020 Apple Inc. All rights reserved.
+  *
+@@ -1343,7 +1344,9 @@ grade:
+ 	/*
+ 	 * Actually load the image file we previously decided to load.
+ 	 */
++	boot_progress_process_stage(proc_getpid(p),p->p_name,"exec load_machfile enter");
+ 	lret = load_machfile(imgp, mach_header, thread, &map, &load_result);
++	boot_progress_process_stage(proc_getpid(p),p->p_name,"exec load_machfile returned");
+ 	if (lret != LOAD_SUCCESS) {
+ 		error = load_return_to_errno(lret);
+ 
+@@ -8171,6 +8174,7 @@ static const char * init_programs[] = {
+ void
+ load_init_program(proc_t p)
+ {
++	boot_progress_stage("load_init_program enter");
+ 	uint32_t i;
+ 	int error;
+ 	vm_map_t map = current_map();
+@@ -8180,12 +8184,23 @@ load_init_program(proc_t p)
+ 	(void) mach_vm_allocate_kernel(map, &scratch_addr, map_page_size, VM_FLAGS_ANYWHERE, VM_KERN_MEMORY_NONE);
+ 	user_addr_t init_envp = USER_ADDR_NULL;
+ #if defined(XNU_OWNER_CACHE_MOUNT) && XNU_OWNER_CACHE_MOUNT
++	boot_progress_stage("SystemOS mount enter");
+ 	int cache_error = native_owner_cache_prepare(p, (user_addr_t)scratch_addr, &init_envp);
++	boot_progress_stage("SystemOS mount returned");
+ 	if (cache_error) panic("offline owner SystemOS mount failed: %d", cache_error);
+ #endif
+ #if defined(XNU_OWNER_DATA_MOUNT) && XNU_OWNER_DATA_MOUNT
++	boot_progress_stage("Data mount enter");
+ 	int data_error = native_owner_data_prepare(p, (user_addr_t)scratch_addr);
++	boot_progress_stage("Data mount returned");
+ 	if (data_error) panic("offline scratch Data mount failed: %d", data_error);
++#if defined(XNU_BOOT_PROGRESS) && XNU_BOOT_PROGRESS
++	extern int sheng_boot_watchdog_policy(void *, uint64_t);
++	boot_progress_stage("temporary watchdog launch policy enter");
++	int policy_error=sheng_boot_watchdog_policy(p, (uint64_t)scratch_addr);
++	if (policy_error) panic("sheng watchdog launch policy failed: %d", policy_error);
++	boot_progress_stage("temporary watchdog launch policy ready");
++#endif
+ #endif
+ #if CONFIG_MEMORYSTATUS
+ 	(void) memorystatus_init_at_boot_snapshot();
+@@ -8682,6 +8697,7 @@ process_signature(proc_t p, struct image_params *imgp)
+ 	 * approve of exec, kill and return immediately.
+ 	 */
+ 	if (imgp->ip_mac_return != 0) {
++		boot_progress_process_stage(proc_getpid(p),p->p_name,"exec MAC policy REFUSED");
+ 		KERNEL_DEBUG_CONSTANT(BSDDBG_CODE(DBG_BSD_PROC, BSD_PROC_EXITREASON_CREATE) | DBG_FUNC_NONE,
+ 		    proc_getpid(p), OS_REASON_EXEC, EXEC_EXIT_REASON_SECURITY_POLICY, 0, 0);
+ 		signature_failure_reason = os_reason_create(OS_REASON_EXEC, EXEC_EXIT_REASON_SECURITY_POLICY);
+@@ -8844,7 +8860,9 @@ done:
+ 		 * state.
+ 		 */
+ 
++		boot_progress_process_stage(proc_getpid(p),p->p_name,"exec process signature enter");
+ 		error = proc_process_signature(p, &signature_failure_reason);
++		boot_progress_process_stage(proc_getpid(p),p->p_name,error ? "exec process signature REFUSED" : "exec process signature accepted");
+ 	}
+ 
+ 	if (0 == error) {
+diff --git a/bsd/kern/kern_exit.c b/bsd/kern/kern_exit.c
+index 11a8212..760c339 100644
+--- a/bsd/kern/kern_exit.c
++++ b/bsd/kern/kern_exit.c
+@@ -1,3 +1,4 @@
++#include <kern/boot_progress.h>
+ /*
+  * Copyright (c) 2000-2016 Apple Inc. All rights reserved.
+  *
+@@ -1845,7 +1846,11 @@ proc_handle_critical_exit(proc_t p, int rv)
+ 	}
+ 
+ 	const char *prefix_str;
++#if defined(XNU_BOOT_PROGRESS) && XNU_BOOT_PROGRESS
++	char prefix_str_buf[1024];
++#else
+ 	char prefix_str_buf[128];
++#endif
+ 
+ 	if (p == initproc) {
+ 		if (strnstr(p->p_name, "preinit", sizeof(p->p_name))) {
+@@ -1858,6 +1863,7 @@ proc_handle_critical_exit(proc_t p, int rv)
+ 	} else {
+ 		/* For processes that aren't launchd, just use the process name and pid */
+ 		snprintf(prefix_str_buf, sizeof(prefix_str_buf), "%s[%d] exited", p->p_name, proc_getpid(p));
++		boot_progress_critical_exit(proc_getpid(p), prefix_str_buf, sizeof(prefix_str_buf));
+ 		prefix_str = prefix_str_buf;
+ 	}
+ 
+@@ -1892,6 +1898,10 @@ proc_prepareexit(proc_t p, int rv, boolean_t perf_notify)
+ 	task_t task = proc_task(p);
+ 
+ 
++	boot_progress_exit(proc_getpid(p),p->p_name,rv,
++	    p->p_exit_reason ? p->p_exit_reason->osr_namespace : 0,
++	    p->p_exit_reason ? p->p_exit_reason->osr_code : 0);
++
+ 	if (p->p_crash_behavior != 0 || p == initproc) {
+ 		proc_handle_critical_exit(p, rv);
+ 	}
+diff --git a/osfmk/arm/arm_init.c b/osfmk/arm/arm_init.c
+index a81d6c4..7187c15 100644
+--- a/osfmk/arm/arm_init.c
++++ b/osfmk/arm/arm_init.c
+@@ -1,3 +1,4 @@
++#include <kern/boot_progress.h>
+ /*
+  * Copyright (c) 2007-2021 Apple Inc. All rights reserved.
+  *
+@@ -369,6 +370,7 @@ arm_init(
+ #endif /* defined(HAS_APPLE_PAC) */
+ 
+ 	PE_init_platform(FALSE, args); /* Get platform expert set up */
++	boot_progress_init();
+ 
+ #if __arm64__
+ 	configure_timer_apple_regs();
+@@ -529,7 +531,9 @@ arm_init(
+ 	__builtin_arm_wsr("pan", 1);
+ #endif  /* __ARM_PAN_AVAILABLE__ */
+ 
++	boot_progress_stage("arm_vm_init enter");
+ 	arm_vm_init(xmaxmem, args);
++	boot_progress_stage("arm_vm_init returned");
+ 
+ 	if (debug_boot_arg) {
+ 		patch_low_glo();
+diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
+index ff5296d..ae94c7e 100644
+--- a/osfmk/arm64/sleh.c
++++ b/osfmk/arm64/sleh.c
+@@ -1,3 +1,4 @@
++#include <kern/boot_progress.h>
+ /*
+  * Copyright (c) 2012-2023 Apple Inc. All rights reserved.
+  *
+@@ -1229,6 +1230,7 @@ handle_breakpoint(arm_saved_state_t *state, uint32_t esr __unused)
+ 	mach_exception_data_type_t codes[2]  = {EXC_ARM_BREAKPOINT};
+ 	mach_msg_type_number_t     numcodes  = 2;
+ 
++	boot_progress_user_breakpoint(state, esr);
+ #if __has_feature(ptrauth_calls)
+ 	if (ESR_EC(esr) == ESR_EC_BRK_AARCH64 &&
+ 	    brk_comment_is_ptrauth(ISS_BRK_COMMENT(esr))) {
+@@ -1672,6 +1674,7 @@ handle_user_abort(arm_saved_state_t *state, uint32_t esr, vm_offset_t fault_addr
+ 	}
+ #endif /* __has_feature(ptrauth_calls) */
+ 
++	boot_progress_user_abort(state, esr, fault_addr);
+ 	if (user_fault_in_self_restrict_mode(thread) &&
+ 	    task_is_jit_exception_fatal(get_threadtask(thread))) {
+ 		extern int exit_with_jit_exception(proc_t p);
+@@ -2111,6 +2114,7 @@ sleh_irq(arm_saved_state_t *state)
+ 
+ 
+ 	sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_OTHER);
++	boot_progress_irq(get_saved_state_pc(state), get_saved_state_cpsr(state), get_saved_state_sp(state));
+ 
+ #if USE_APPLEARMSMP
+ 	PE_handle_ext_interrupt();
+diff --git a/osfmk/console/serial_console.c b/osfmk/console/serial_console.c
+index 0066f83..21fdcc0 100644
+--- a/osfmk/console/serial_console.c
++++ b/osfmk/console/serial_console.c
+@@ -1,3 +1,4 @@
++#include <kern/boot_progress.h>
+ /*
+  * Copyright (c) 2000-2020 Apple, Inc. All rights reserved.
+  *
+@@ -254,6 +255,7 @@ get_cons_ops_index(void)
+ static inline void
+ _cnputc(char c, bool poll)
+ {
++	if (boot_progress_active()) { boot_progress_putc(c); return; }
+ 	bool in_debugger = (kernel_debugger_entry_count > 0);
+ 	const uint32_t idx = get_cons_ops_index();
+ 
+diff --git a/osfmk/console/video_console.c b/osfmk/console/video_console.c
+index 4c1edf1..e62ece1 100644
+--- a/osfmk/console/video_console.c
++++ b/osfmk/console/video_console.c
+@@ -1,3 +1,4 @@
++#include <kern/boot_progress.h>
+ /*
+  * Copyright (c) 2000-2020 Apple Inc. All rights reserved.
+  *
+@@ -1230,6 +1231,7 @@ gc_update_color(int color, boolean_t fore)
+ void
+ vcputc_options(char c, __unused bool poll)
+ {
++	if (boot_progress_active()) { boot_progress_putc(c); return; }
+ 	if (gc_initialized && gc_enabled) {
+ 		VCPUTC_LOCK_LOCK();
+ 		if (gc_enabled) {
+@@ -2896,6 +2898,9 @@ initialize_screen(PE_Video * boot_vinfo, unsigned int op)
+ 			vinfo = new_vinfo;
+ 		}
+ 
++		boot_progress_bind(vinfo.v_baseaddr, vinfo.v_width, vinfo.v_height,
++		    vinfo.v_rowbytes, vinfo.v_depth);
++
+ 		// If we changed the virtual address, remove the old mapping
+ 		if (newVideoVirt != 0) {
+ 			if (lastVideoVirt && lastVideoMapSize) {                                                /* Was the framebuffer mapped before? */
+@@ -3048,6 +3053,10 @@ initialize_screen(PE_Video * boot_vinfo, unsigned int op)
+ 	}
+ #endif
+ 	}
++
++	/* Console initialization/acquisition may clear the existing mapping. */
++	boot_progress_bind(vinfo.v_baseaddr, vinfo.v_width, vinfo.v_height,
++	    vinfo.v_rowbytes, vinfo.v_depth);
+ }
+ 
+ void vcattach(void); /* XXX gcc 4 warning cleanup */
+diff --git a/osfmk/kern/Makefile b/osfmk/kern/Makefile
+index c61af15..6485f4a 100644
+--- a/osfmk/kern/Makefile
++++ b/osfmk/kern/Makefile
+@@ -114,6 +114,7 @@ PRIVATE_EXPORT_FILES = \
+ 
+ 
+ XNU_ONLY_EXPORTS = \
++	boot_progress.h \
+ 	arcade.h \
+ 	btlog.h \
+ 	cpc.h \
+diff --git a/osfmk/kern/boot_progress.h b/osfmk/kern/boot_progress.h
+new file mode 100644
+index 0000000..92f70b4
+--- /dev/null
++++ b/osfmk/kern/boot_progress.h
+@@ -0,0 +1,34 @@
++// SPDX-License-Identifier: MIT
++#ifndef XNU_BOOT_PROGRESS_H
++#define XNU_BOOT_PROGRESS_H
++#include <stdint.h>
++#if defined(XNU_BOOT_PROGRESS) && XNU_BOOT_PROGRESS
++void boot_progress_init(void);
++void boot_progress_start(void);
++int boot_progress_active(void);
++void boot_progress_bind(uintptr_t, unsigned, unsigned, unsigned, unsigned);
++void boot_progress_putc(char);
++void boot_progress_stage(const char *);
++void boot_progress_irq(uint64_t, uint64_t, uint64_t);
++void boot_progress_poll(void);
++void boot_progress_user_breakpoint(void *, unsigned);
++void boot_progress_user_abort(void *, unsigned, uint64_t);
++void boot_progress_critical_exit(int, char *, unsigned long);
++void boot_progress_process_stage(int, const char *, const char *);
++void boot_progress_exit(int, const char *, int, unsigned, uint64_t);
++#else
++#define boot_progress_init() ((void)0)
++#define boot_progress_start() ((void)0)
++#define boot_progress_active() 0
++#define boot_progress_bind(...) ((void)0)
++static inline void boot_progress_putc(char c) { (void)c; }
++#define boot_progress_stage(s) ((void)0)
++#define boot_progress_irq(...) ((void)0)
++#define boot_progress_poll() ((void)0)
++#define boot_progress_user_breakpoint(...) ((void)0)
++#define boot_progress_user_abort(...) ((void)0)
++#define boot_progress_critical_exit(...) ((void)0)
++#define boot_progress_process_stage(...) ((void)0)
++#define boot_progress_exit(...) ((void)0)
++#endif
++#endif
+diff --git a/osfmk/kern/startup.c b/osfmk/kern/startup.c
+index dfa5da2..8a82186 100644
+--- a/osfmk/kern/startup.c
++++ b/osfmk/kern/startup.c
+@@ -1,3 +1,4 @@
++#include <kern/boot_progress.h>
+ /*
+  * Copyright (c) 2000-2020 Apple Inc. All rights reserved.
+  *
+@@ -221,6 +222,7 @@ TUNABLE(startup_debug_t, startup_debug, "startup_debug", 0);
+ static inline void
+ kernel_bootstrap_log(const char *message)
+ {
++	boot_progress_stage(message);
+ 	if ((startup_debug & STARTUP_DEBUG_VERBOSE) &&
+ 	    startup_phase >= STARTUP_SUB_KPRINTF) {
+ 		kprintf("kernel_bootstrap: %s\n", message);
+@@ -231,6 +233,7 @@ kernel_bootstrap_log(const char *message)
+ static inline void
+ kernel_bootstrap_thread_log(const char *message)
+ {
++	boot_progress_stage(message);
+ 	if ((startup_debug & STARTUP_DEBUG_VERBOSE) &&
+ 	    startup_phase >= STARTUP_SUB_KPRINTF) {
+ 		kprintf("kernel_bootstrap_thread: %s\n", message);
+@@ -649,6 +652,7 @@ kernel_bootstrap_thread(void)
+ 	 */
+ 	kernel_bootstrap_thread_log("clock_service_create");
+ 	clock_service_create();
++	boot_progress_start();
+ 
+ 	/*
+ 	 *	Create the device service.
+diff --git a/pexpert/arm/pe_kprintf.c b/pexpert/arm/pe_kprintf.c
+index fd7f5cf..0458a75 100644
+--- a/pexpert/arm/pe_kprintf.c
++++ b/pexpert/arm/pe_kprintf.c
+@@ -1,3 +1,4 @@
++#include <kern/boot_progress.h>
+ /*
+  * Copyright (c) 2000-2019 Apple Inc. All rights reserved.
+  */
+@@ -85,6 +86,7 @@ __startup_func
+ static void
+ PE_init_kprintf(void)
+ {
++	if (boot_progress_active()) { PE_kputc = boot_progress_putc; return; }
+ 	if (serial_init()) {
+ 		PE_kputc = serial_putc_crlf;
+ 	} else {

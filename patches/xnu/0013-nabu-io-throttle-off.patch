@@ -1,0 +1,35 @@
+--- a/bsd/vfs/vfs_subr.c
++++ b/bsd/vfs/vfs_subr.c
+@@ -79,6 +79,7 @@
+ 
+ #include <sys/param.h>
+ #include <sys/systm.h>
++#include <pexpert/pexpert.h>
+ #include <sys/proc_internal.h>
+ #include <sys/kauth.h>
+ #include <sys/mount_internal.h>
+@@ -4697,6 +4698,24 @@
+ 	if (iosched_enabled && (features & DK_FEATURE_PRIORITY)) {
+ 		mp->mnt_ioflags |= MNT_IOFLAGS_IOSCHED_SUPPORTED;
+ 		throttle_info_disable_throttle(mp->mnt_devbsdunit, (mp->mnt_ioflags & MNT_IOFLAGS_FUSION_DRIVE) != 0);
++	} else {
++		/* nabu: this board has no usable timer interrupts, so throttle_timer
++		 * (thread_call_enter_delayed) never fires and low-priority I/O threads
++		 * sleep in throttle_lowpri_io forever (l400: 21 services, including the
++		 * IOMFB bics daemon's xpcproxy). Every disk here reports features=0
++		 * (l401: six "features 0" lines, disk0..disk5), so the official branch
++		 * above never disables software throttling for any of them. l401 showed
++		 * that only the root volume (SystemOS, devno=3) matched the old
++		 * "devvp == rootvp" condition and the throttled services live on the
++		 * Data volume (disk5), so the switch now applies to every mount. */
++		unsigned int nabu_throttle_off = 0;
++		if (PE_parse_boot_argn("nabu-io-throttle-off", &nabu_throttle_off, sizeof(nabu_throttle_off)) &&
++		    nabu_throttle_off) {
++			throttle_info_disable_throttle(mp->mnt_devbsdunit, false);
++			printf("nabu: io throttle off devno=%d dev=%s fs=%s\n", mp->mnt_devbsdunit,
++			    (devvp && devvp->v_name) ? devvp->v_name : "-",
++			    (mp->mnt_vtable && mp->mnt_vtable->vfc_name) ? mp->mnt_vtable->vfc_name : "-");
++		}
+ 	}
+ #endif /* CONFIG_IOSCHED */
+ 	return error;

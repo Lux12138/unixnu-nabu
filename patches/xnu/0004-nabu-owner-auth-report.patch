@@ -1,0 +1,34 @@
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -7100,3 +7100,7 @@
+ 	root_authorized = (vfs_flags(root_mount) & MNT_RDONLY) && root_device != NODEV &&
+ 	    native_verified_block_root_authorized(root_device);
++	printf("nabu: owner-auth flags=%08x dev=%d ro=%d devok=%d authorized=%d\n",
++	    (unsigned) vfs_flags(root_mount), (int) root_device,
++	    (vfs_flags(root_mount) & MNT_RDONLY) != 0, root_device != NODEV,
++	    root_authorized);
+ 	if (!root_authorized) goto done;
+@@ -7167,3 +7167,11 @@
+ done:
++	printf("nabu: owner stage=%d error=%d root=%d cache=%d selected=%d\n",
++	    native_owner_cache_stage, error, root_authorized, cache_authorized, (int) selected);
++	{
++	    /* One flush after the stage line: the ring keeps 4 KiB and this is the last
++	     * line written before the caller panics. */
++	    extern int nabu_log_flush_tail_nosync(int) __attribute__((weak));
++	    if (nabu_log_flush_tail_nosync) nabu_log_flush_tail_nosync(0);
++	}
+ 	if (mounted_root) vnode_put(mounted_root);
+ 	int root_recheck = root_authorized && native_verified_block_root_authorized(root_device);
+@@ -7189,2 +7189,11 @@
+ 	native_owner_cache_checkpoint(error, cache_authorized);
++	{
++	    extern volatile int native_owner_boot_manifest_status;
++	    printf("nabu: owner final stage=%d error=%d root=%d cache=%d recheck=%d selected=%d status=%d same=%d\n",
++	        native_owner_cache_stage, error, root_authorized, cache_authorized,
++	        native_owner_cache_root_recheck, (int) selected,
++	        native_owner_boot_manifest_status, (root_device == selected) ? 1 : 0);
++	    extern int nabu_log_flush_tail_nosync(int) __attribute__((weak));
++	    if (nabu_log_flush_tail_nosync) nabu_log_flush_tail_nosync(0);
++	}
+ 	return error;

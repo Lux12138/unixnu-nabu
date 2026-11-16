@@ -1,0 +1,87 @@
+--- a/bsd/kern/subr_log_stream.c	2026-11-02 00:00:57.109612431 +0800
++++ b/bsd/kern/subr_log_stream.c	2026-11-02 00:00:57.112709720 +0800
+@@ -1056,3 +1056,84 @@
+ #endif /* LOG_STREAM_VERIFY */
+ }
+ STARTUP(OSLOG, STARTUP_RANK_SECOND, oslog_stream_init);
++
++/*
++ * nabu: kernel-side access to the os_log stream.
++ *
++ * The stream buffer is allocated only from oslog_streamopen(), so on a system whose reader never
++ * runs the stream stays disabled and os_log() drops every message. These entry points let the
++ * storage driver bring the stream up itself, copy the ring out, and hand it back afterwards.
++ */
++uint8_t *
++nabu_oslog_stream_state(size_t *bytes)
++{
++	if (bytes != NULL) {
++		*bytes = (log_stream.ls_enabled && log_stream.ls_buf != NULL) ?
++		    blocks_size(log_stream.ls_blk_count) : 0;
++	}
++	return log_stream.ls_enabled ? log_stream.ls_buf : NULL;
++}
++
++int
++nabu_oslog_stream_enable(void)
++{
++	return oslog_streamopen((dev_t)0, 0, 0, NULL);
++}
++
++int
++nabu_oslog_stream_disable(void)
++{
++	return oslog_streamclose((dev_t)0, 0, 0, NULL);
++}
++
++size_t
++nabu_oslog_stream_raw(uint8_t *dst, size_t cap)
++{
++	size_t n;
++
++	if (dst == NULL || cap == 0 || !log_stream.ls_enabled ||
++	    log_stream.ls_buf == NULL || log_stream.ls_blk_count == 0) {
++		return 0;
++	}
++	n = blocks_size(log_stream.ls_blk_count);
++	if (n > cap) {
++		n = cap;
++	}
++	memcpy(dst, log_stream.ls_buf, n);
++	return n;
++}
++
++size_t
++nabu_oslog_stream_rawsize(void)
++{
++	if (!log_stream.ls_enabled || log_stream.ls_buf == NULL) {
++		return 0;
++	}
++	return blocks_size(log_stream.ls_blk_count);
++}
++
++/* Bytes committed to the ring since it was opened; the writer wraps, so this can exceed rawsize. */
++size_t
++nabu_oslog_stream_committed(void)
++{
++	if (!log_stream.ls_enabled) {
++		return 0;
++	}
++	return log_stream.ls_commited.v;
++}
++
++/* The log_stream_t itself, for on-disk self-diagnostics. */
++size_t
++nabu_oslog_stream_hdr(uint8_t *dst, size_t cap)
++{
++	size_t n = sizeof(log_stream);
++
++	if (dst == NULL || cap == 0) {
++		return 0;
++	}
++	if (n > cap) {
++		n = cap;
++	}
++	memcpy(dst, &log_stream, n);
++	return n;
++}

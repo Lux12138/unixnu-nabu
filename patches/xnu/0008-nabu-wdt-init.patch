@@ -1,0 +1,11 @@
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
+@@ -1498,6 +1498,8 @@
+ kern_return_t
+ bsd_autoconf(void)
+ {
++	extern void nabu_wdt_init(void);
++	nabu_wdt_init();
+ 	kprintf("bsd_autoconf: calling kminit\n");
+ 	kminit();
+ #if XNU_QCOM_USB_DEBUG

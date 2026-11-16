@@ -1,0 +1,39 @@
+diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -148,7 +148,15 @@
+ #if HAS_CLUSTER
+ 	and		x0, x15, #0xFFFF					// CPU number in Affinity0, cluster ID in Affinity1
+ #else
+-	and		x0, x15, #0xFF						// CPU number is in MPIDR Affinity Level 0
++	/* l615: SM8150 cores carry their cluster number in Affinity1 (DT cpu reg =
++	 * 0x0/0x100/.../0x700, one core per cluster, so Affinity0 is 0 for all of them),
++	 * and cpu_data->cpu_phys_id is that reg verbatim. Masking only Affinity0 made this
++	 * compare unable to match any entry, so the cold core fell through to
++	 * Lskip_cpu_reset_handler and sat in `b .` - silent, with PSCI CPU_ON returning 0.
++	 * Match Affinity0+Affinity1, which is what the DT and PSCI both use.
++	 * (l608 found this; l615 only makes it survive `unixnu tree`, which regenerates the
++	 * work tree from the framework and used to drop it.) */
++	and		x0, x15, #0xFFFF						// CPU number in MPIDR Affinity0+Affinity1 (nabu)
+ #endif
+ 	ldr		x1, [x19, CPU_DATA_ENTRIES]			// Load start of data entries
+ 	add		x3, x1, MAX_CPUS * 16				// end addr of data entries = start + (16 * MAX_CPUS)
+diff --git a/pexpert/pexpert/arm64/board_config.h b/pexpert/pexpert/arm64/board_config.h
+--- a/pexpert/pexpert/arm64/board_config.h
++++ b/pexpert/pexpert/arm64/board_config.h
+@@ -134,7 +134,14 @@
+ #include <pexpert/arm64/BCM2837.h>
+ 
+ #define MAX_L2_CLINE                   6
+-#define MAX_CPUS                       4
++/* l615: SM8150 has 8 cores. MAX_CPUS sizes topology_cpu_array[], CpuDataEntries
++ * (the _reset_vector walk window is MAX_CPUS * 16 bytes) and ml_get_max_cpu_number();
++ * at 4, cpu4..7 never get a topology entry and can never register. Budgets checked:
++ * cpumap_t is 64-bit (static_assert, cpu_data_internal.h:63), CPUWINDOWS_MAX == 4 so the
++ * window is 8*4*16 KiB, and MAX_CPUS <= 256 (_COMM_PAGE_CPU_TO_CLUSTER) holds.
++ * MAX_CPU_CLUSTERS stays 1: with HAS_CLUSTER on, the DT reg values become eight
++ * clusters and trip assert(cpu->cluster_id < MAX_CPU_CLUSTERS). */
++#define MAX_CPUS                       8
+ #define MAX_CPU_CLUSTERS               1
+ 
+ #define CORE_NCTRS                     8 /* Placeholder; KPC is not enabled for this target */

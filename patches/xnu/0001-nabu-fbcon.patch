@@ -1,0 +1,182 @@
+--- a/pexpert/arm/pe_serial.c
++++ b/pexpert/arm/pe_serial.c
+@@ -788,9 +788,167 @@
+ }
+ #endif /* HIBERNATION */
+ 
++/*
++ * nabu: framebuffer "serial" console. kprintf output is drawn directly into
++ * the boot framebuffer described by PE_state.video; no UART is required.
++ * Each character row clears only its own height, and lines wrap at the top.
++ */
++extern unsigned char iso_font[256 * 16];
++
++#define FBCON_SCALE 2
++#define FBCON_FG    0xffffffffu
++#define FBCON_BG    0xff000000u
++
++static volatile uint32_t *fbcon_base;
++static uint32_t fbcon_width, fbcon_height, fbcon_stride;
++static uint32_t fbcon_cols, fbcon_rows, fbcon_col, fbcon_row;
++static boolean_t fbcon_ready;
++
++unsigned nabu_fbcon_state = 0;	/* 0 not probed, 1 registered, 2 geometry rejected,
++ * 4 registered but switched off by nabu-fbcon=0 (never paints); l505's 3 (unregistered)
++ * is gone - unregistering is what silenced CDC. */
++unsigned nabu_fbcon_rows = 0;	/* l505: text rows the console may use, set by fbcon_init */
++static void
++fbcon_clear_row(uint32_t row)
++{
++	uint32_t y0 = row * 16 * FBCON_SCALE;
++	uint32_t y1 = y0 + 16 * FBCON_SCALE;
++
++	if (y1 > fbcon_height) {
++		y1 = fbcon_height;
++	}
++	for (uint32_t y = y0; y < y1; y++) {
++		volatile uint32_t *line = fbcon_base + y * (fbcon_stride / 4);
++		for (uint32_t x = 0; x < fbcon_width; x++) {
++			line[x] = FBCON_BG;
++		}
++	}
++}
++
++static void
++fbcon_newline(void)
++{
++	fbcon_col = 0;
++	fbcon_row = (fbcon_row + 1) % fbcon_rows;
++	fbcon_clear_row(fbcon_row);
++	fbcon_clear_row((fbcon_row + 1) % fbcon_rows);
++}
++
++static void
++fbcon_init(void)
++{
++	fbcon_cols = fbcon_width / (8 * FBCON_SCALE);
++	fbcon_rows = fbcon_height / (16 * FBCON_SCALE);
++	{ unsigned r=0; PE_parse_boot_argn("nabu-fbcon-rows",&r,sizeof(r)); if(r!=0 && fbcon_rows>r) fbcon_rows=r; }	/* l505: shrink the log region */
++	nabu_fbcon_rows = fbcon_rows;
++	fbcon_col = 0;
++	fbcon_row = 0;
++	for (uint32_t r = 0; r < fbcon_rows; r++) {
++		fbcon_clear_row(r);
++	}
++}
++
++static unsigned int
++fbcon_transmit_ready(void)
++{
++	return 1;
++}
++
++static void
++fbcon_transmit_data(uint8_t c)
++{
++	if (nabu_fbcon_state == 4U) {
++		return;
++	}
++	if (c == '\r') {
++		fbcon_col = 0;
++		return;
++	}
++	if (c == '\n') {
++		fbcon_newline();
++		return;
++	}
++	if (fbcon_col >= fbcon_cols) {
++		fbcon_newline();
++	}
++	const unsigned char *glyph = iso_font + c * 16;
++	uint32_t x0 = fbcon_col * 8 * FBCON_SCALE;
++	uint32_t y0 = fbcon_row * 16 * FBCON_SCALE;
++	for (uint32_t gy = 0; gy < 16; gy++) {
++		for (uint32_t sy = 0; sy < FBCON_SCALE; sy++) {
++			volatile uint32_t *line = fbcon_base +
++			    (y0 + gy * FBCON_SCALE + sy) * (fbcon_stride / 4) + x0;
++			for (uint32_t gx = 0; gx < 8; gx++) {
++				uint32_t px = (glyph[gy] & (1u << gx)) ? FBCON_FG : FBCON_BG;
++				for (uint32_t sx = 0; sx < FBCON_SCALE; sx++) {
++					line[gx * FBCON_SCALE + sx] = px;
++				}
++			}
++		}
++	}
++	fbcon_col++;
++}
++
++static unsigned int
++fbcon_receive_ready(void)
++{
++	return 0;
++}
++
++static uint8_t
++fbcon_receive_data(void)
++{
++	return 0;
++}
++
++SECURITY_READ_ONLY_LATE(static struct pe_serial_functions) nabu_fbcon_serial_functions =
++{
++	.init = fbcon_init,
++	.transmit_ready = fbcon_transmit_ready,
++	.transmit_data = fbcon_transmit_data,
++	.receive_ready = fbcon_receive_ready,
++	.receive_data = fbcon_receive_data,
++	.device = SERIAL_NABU_FBCON
++};
++
++static void
++fbcon_probe(void)
++{
++	vm_offset_t base;
++	vm_size_t size;
++
++	{ unsigned fb=1; PE_parse_boot_argn("nabu-fbcon",&fb,sizeof(fb)); if(fb==0){ nabu_fbcon_state=4U; } }
++	/* l506: the switch must NOT unregister this console. l505 returned early here, so
++	 * register_serial_functions(SERIAL_NABU_FBCON) never ran, the registered-function set that
++	 * serial_init() consults changed, and CDC went silent from that boot on. State 4 now means
++	 * "registered, never paint": the paint path returns, everything else is byte-for-byte l504. */
++	if (fbcon_ready || PE_state.video.v_baseAddr == 0 ||
++	    PE_state.video.v_depth != 32 || PE_state.video.v_width == 0 ||
++	    PE_state.video.v_height == 0 ||
++	    PE_state.video.v_rowBytes < PE_state.video.v_width * 4) {
++		if (!fbcon_ready) { nabu_fbcon_state = 2U; }
++		return;
++	}
++	base = (vm_offset_t)PE_state.video.v_baseAddr;
++	size = (vm_size_t)PE_state.video.v_rowBytes * PE_state.video.v_height;
++	fbcon_base = (volatile uint32_t *)ml_io_map_wcomb(base, size);
++	if (fbcon_base == NULL) {
++		return;
++	}
++	fbcon_width  = PE_state.video.v_width;
++	fbcon_height = PE_state.video.v_height;
++	fbcon_stride = PE_state.video.v_rowBytes;
++	fbcon_ready  = TRUE;
++	if (nabu_fbcon_state != 4U) {
++		nabu_fbcon_state = 1U;
++	}
++	register_serial_functions(&nabu_fbcon_serial_functions);
++}
++
+ int
+ serial_init(void)
+ {
++	fbcon_probe();
+ 	DTEntry         entryP = NULL;
+ 	uint32_t        prop_size;
+ 	vm_offset_t     soc_base;
+--- a/pexpert/pexpert/arm/protos.h
++++ b/pexpert/pexpert/arm/protos.h
+@@ -47,7 +47,8 @@
+ 	SERIAL_DOCKCHANNEL=0x2,
+ 	SERIAL_PI3_UART=0x4,
+ 	SERIAL_VMAPPLE_UART=0x8,
+-	SERIAL_DCC_UART=0x10
++	SERIAL_DCC_UART=0x10,
++	SERIAL_NABU_FBCON=0x20
+ } serial_device_t;
+ 
+ kern_return_t serial_irq_enable(serial_device_t device);

@@ -1,0 +1,66 @@
+#!/bin/bash
+# xcrun(1) shim for building XNU on Linux.
+#
+# xnu's makedefs call `xcrun -sdk <sdk> -find <tool>` for every tool and
+# `xcrun -sdk <sdk> -show-sdk-path|-show-sdk-version|-show-sdk-platform-path`
+# to resolve the SDK.  On Linux there is no Xcode, so:
+#
+#   * `-find TOOL` resolves TOOL against the directories in $XNU_TOOLCHAIN_BIN
+#     first (the Command Line Tools' usr/bin, where setup-toolchain.py
+#     installs the Mach-O tools, mig and the clang wrappers, then the Xcode
+#     toolchain's usr/bin, where it installs iig, as on a Mac), then against
+#     $PATH.  Unknown tools print
+#     nothing and exit 1, which is what makedefs expects for the optional ones
+#     (ctfconvert, scan-build, docc...).
+#   * `-show-sdk-path` echoes $UNIXNU_SDKROOT, which the driver points at the
+#     build tree's fakeroot, so every $(SDKROOT)/... path in MakeInc.def lands
+#     there.
+#
+# Everything else is passed through: `xcrun [-sdk X] cmd args...` execs cmd.
+set -u
+
+XNU_TOOLCHAIN_BIN="${XNU_TOOLCHAIN_BIN:-/Library/Developer/CommandLineTools/usr/bin /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin}"
+
+sdk=""
+verbose=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -sdk|--sdk)          sdk="$2"; shift 2 ;;
+        -verbose|--verbose)  verbose=1; shift ;;
+        -log|--log)          shift ;;
+        -no-cache|--no-cache|-kill-cache|--kill-cache) shift ;;
+        -toolchain|--toolchain) shift 2 ;;
+        -f|-find|--find)
+            shift
+            tool="${1:-}"
+            [ -n "${tool}" ] || { echo "xcrun: -find needs a tool" >&2; exit 1; }
+            for d in ${XNU_TOOLCHAIN_BIN}; do
+                if [ -x "${d}/${tool}" ]; then echo "${d}/${tool}"; exit 0; fi
+            done
+            if p=$(command -v "${tool}" 2>/dev/null); then echo "${p}"; exit 0; fi
+            [ "${verbose}" = 1 ] && echo "xcrun: cannot find ${tool}" >&2
+            exit 1
+            ;;
+        -show-sdk-path|--show-sdk-path)
+            echo "${UNIXNU_SDKROOT:-${sdk}}"; exit 0 ;;
+        -show-sdk-version|--show-sdk-version)
+            echo "${UNIXNU_SDK_VERSION:-17.0}"; exit 0 ;;
+        -show-sdk-build-version|--show-sdk-build-version)
+            echo "${UNIXNU_SDK_BUILD:-21H461}"; exit 0 ;;
+        -show-sdk-platform-path|--show-sdk-platform-path)
+            echo "${UNIXNU_PLATFORM_PATH:-${UNIXNU_SDKROOT:-/}/Platform}"; exit 0 ;;
+        -show-sdk-platform-version|--show-sdk-platform-version)
+            echo "${UNIXNU_SDK_VERSION:-17.0}"; exit 0 ;;
+        --version)
+            echo "xcrun version 70 (UniXNU shim)."; exit 0 ;;
+        -*) shift ;;
+        *)  break ;;
+    esac
+done
+
+[ $# -gt 0 ] || exit 0
+tool="$1"; shift
+for d in ${XNU_TOOLCHAIN_BIN}; do
+    [ -x "${d}/${tool}" ] && exec "${d}/${tool}" "$@"
+done
+exec "${tool}" "$@"

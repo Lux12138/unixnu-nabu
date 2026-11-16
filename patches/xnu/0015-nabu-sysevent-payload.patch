@@ -1,0 +1,19 @@
+# nabu: the exit-reason description string must survive the trip to the console.
+# record_system_event() formats into char payload[SYSTEM_EVENT_PAYLOAD_MAX]
+# (system_event_log.c:76) and the only other user is a copyinstr buffer
+# (sys_record_event.c:41); both are kernel stack, nothing crosses an ABI. The header
+# comment says the limit is there because the messages "go over serial" -- on this
+# board that channel is the QcomGeniSpi->USBCDC serial console, and it carries
+# 760-character lines, so 96 was cutting our own evidence: l543 shows
+# "-- exit reason namespace: 2 -- subcode: 0x5 -- descriptio" stopping at 95.
+--- a/bsd/sys/event_log.h
++++ b/bsd/sys/event_log.h
+@@ -40,7 +40,7 @@
+ // These arbitrary numbers are used to limit the size of the system event message.
+ // We don't want the messages to be too long, as they're going over serial.
+ #define SYSTEM_EVENT_EVENT_MAX 64
+-#define SYSTEM_EVENT_PAYLOAD_MAX 96
++#define SYSTEM_EVENT_PAYLOAD_MAX 256
+ 
+ __enum_decl(system_event_type, uint8_t, {
+ 	SYSTEM_EVENT_TYPE_FIRST = 0,

@@ -1,0 +1,23 @@
+diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -7552,6 +7552,19 @@ native_gpu_addon_install(proc_t p, user_addr_t scratch)
+ 		}
+ 		at += (packed + 7) & ~7ULL;
+ 	}
++	/* l695r: one read-only diagnostic line. The install counters, then whether the publish marker is
++	 * visible at its source path (1 = vnode_lookup succeeded, 0 = it failed). Separates "the addon never
++	 * wrote the marker" from "it wrote it but the plugin cannot reach it". */
++	{
++		vnode_t probe = NULLVP;
++		int lookup_error = vnode_lookup("/private/var/ngpu/addons/NativeAdrenoMetal.publish", 0, &probe, ctx);
++		if (!lookup_error) {
++			vnode_put(probe);
++		}
++		printf("nabu-addon: files=%d wr=%d same=%d fail=%d err=%d publish=%d\n", native_gpu_addon_files,
++		    native_gpu_addon_written, native_gpu_addon_same, native_gpu_addon_failed, native_gpu_addon_error,
++		    lookup_error ? 0 : 1);
++	}
+ }
+ /* The OS cryptex where iPadOS looks for it. The root volume's entries for cryptex content are links into /System/Cryptexes/OS, which
+  * leads to /private/preboot/Cryptexes/OS; WebKit's processes are ExtensionKit extensions reached that way

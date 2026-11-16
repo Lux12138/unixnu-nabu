@@ -1,0 +1,17 @@
+--- a/bsd/kern/bsd_init.c	2026-10-26 03:02:11.841615168 +0800
++++ b/bsd/kern/bsd_init.c	2026-10-26 03:02:11.880456506 +0800
+@@ -1086,7 +1086,13 @@
+ 			}
+ #endif
+ 			if (autherr && !owner_authorized) {
+-				panic("rootvp not authenticated after mounting");
++				int nabu_unverified = 0;
++				PE_parse_boot_argn("nabu-unverified-root", &nabu_unverified,
++				    sizeof(nabu_unverified));
++				if (!nabu_unverified) {
++					panic("rootvp not authenticated after mounting");
++				}
++				printf("nabu: unverified root accepted (autherr %d)\n", autherr);
+ 			}
+ #if defined(XNU_OWNER_ROOT_TRUST) && XNU_OWNER_ROOT_TRUST
+ 			{

@@ -1,0 +1,214 @@
+--- a/bsd/vfs/vfs_syscalls.c
++++ b/bsd/vfs/vfs_syscalls.c
+@@ -9919,6 +9919,139 @@89
+ 	           UIO_USERSPACE);
+ }
+ 
++/* Kernel-side mkdir by path string. mkdir1at() is static, so the boot code that
++ * assembles the Data skeleton cannot call it directly. UIO_SYSSPACE keeps the path
++ * a kernel pointer. */
++int
++nabu_kern_mkdir(const char *path, int mode)
++{
++	struct vnode_attr va;
++
++	if (path == NULL || mode <= 0) {
++		return EINVAL;
++	}
++	VATTR_INIT(&va);
++	VATTR_SET(&va, va_mode, mode);
++	return mkdir1at(vfs_context_kernel(), (user_addr_t)(uintptr_t)path, &va, AT_FDCWD,
++	    UIO_SYSSPACE);
++}
++
++
++/* Kernel-side whole-file write by path string, for the same reason as
++ * nabu_kern_mkdir: the boot code that prepares the Data tree runs on the kernel
++ * context, so the path stays a kernel pointer (UIO_SYSSPACE). */
++int
++nabu_kern_write_file(const char *path, const char *data, size_t len, int mode)
++{
++	vfs_context_t ctx = vfs_context_kernel();
++	vnode_t vp = NULLVP;
++	int error;
++
++	if (path == NULL || (data == NULL && len != 0)) {
++		return EINVAL;
++	}
++	error = vnode_open(path, O_WRONLY | O_CREAT | O_TRUNC, mode, 0, &vp, ctx);
++	if (error != 0) {
++		return error;
++	}
++	error = vn_rdwr(UIO_WRITE, vp, (caddr_t)(uintptr_t)data, (int)len, 0,
++	    UIO_SYSSPACE, IO_SYNC, vfs_context_ucred(ctx), NULL, NULL);
++	if (vnode_close(vp, FWASWRITTEN, ctx) != 0 && error == 0) {
++		error = EIO;
++	}
++	return error;
++}
++
++
++/* Same as nabu_kern_write_file(), but the owner and mode are restated on the vnode the write already
++ * holds and returned per file. l537 is why: all five preference writes returned success while the
++ * attribute loop's own vnode_lookup() of those very same paths came back ENOENT, so nobody could tell
++ * the file from the path from the attribute step -- and 0600/501:501 never landed. A preference file
++ * the mobile-side cfprefsd cannot open is a silent no-op, so the ownership is part of the write, not a
++ * separate pass that may or may not find the file. */
++int
++nabu_kern_write_file_owner(const char *path, const char *data, size_t len, int mode, uid_t uid,
++    gid_t gid)
++{
++	vfs_context_t ctx = vfs_context_kernel();
++	vnode_t vp = NULLVP;
++	int error;
++
++	if (path == NULL || (data == NULL && len != 0)) {
++		return EINVAL;
++	}
++	error = vnode_open(path, O_WRONLY | O_CREAT | O_TRUNC, mode, 0, &vp, ctx);
++	if (error != 0) {
++		return error;
++	}
++	error = vn_rdwr(UIO_WRITE, vp, (caddr_t)(uintptr_t)data, (int)len, 0,
++	    UIO_SYSSPACE, IO_SYNC, vfs_context_ucred(ctx), NULL, NULL);
++	if (error == 0) {
++		struct vnode_attr va;
++
++		VATTR_INIT(&va);
++		VATTR_SET(&va, va_mode, mode & 07777);
++		VATTR_SET(&va, va_uid, uid);
++		VATTR_SET(&va, va_gid, gid);
++		error = vnode_setattr(vp, &va, ctx);
++	}
++	if (vnode_close(vp, FWASWRITTEN, ctx) != 0 && error == 0) {
++		error = EIO;
++	}
++	return error;
++}
++
++
++/* Read back the first `cap` bytes of a path, together with the size the vnode itself reports. The
++ * skip-Setup writer can only ever say that vn_rdwr() returned 0; it cannot say what is on the file,
++ * and a preferences reader that cannot parse a plist falls back to its defaults without reporting
++ * anything. O_RDONLY without O_CREAT is also the control half of this helper: a path that is not
++ * there comes back ENOENT, which is what turns a zero from the six real reads into evidence instead
++ * of a reader that "succeeds" at everything. This tree's prototype is bsd/sys/vnode.h:2332 --
++ * vn_rdwr(rw, vp, base, len, offset, segflg, ioflg, cred, int *aresid, proc_t p) -- so the residual
++ * count comes back through an int and p stays NULL, exactly the shape nabu_kern_write_file() uses. */
++int
++nabu_kern_read_file_head(const char *path, char *out, size_t cap, size_t *got,
++    unsigned long long *fsize, unsigned *gset)
++{
++	vfs_context_t ctx = vfs_context_kernel();
++	vnode_t vp = NULLVP;
++	struct vnode_attr va;
++	int aresid = 0;
++	int error;
++
++	if (path == NULL || out == NULL || cap == 0 || got == NULL || fsize == NULL || gset == NULL) {
++		return EINVAL;
++	}
++	*got = 0;
++	*fsize = 0;
++	*gset = 0;
++	error = vnode_open(path, O_RDONLY, 0, 0, &vp, ctx);
++	if (error != 0) {
++		return error;
++	}
++	VATTR_INIT(&va);
++	/* l543: XNU fills a vnode_attr according to the request bits -- this same file's exec path does
++	 * VATTR_WANTED(vap, va_data_size) immediately before vnode_getattr() (kern_exec.c:6551), and a few
++	 * lines later refuses a zero-length image (kern_exec.c:6566). l541 only did VATTR_INIT, so the field
++	 * was never asked for and I printed 0. Ask for it the way this tree does, and also report whether
++	 * the filesystem set the bit (gset=), because a size of 0 must not be able to mean two things.
++	 * VATTR_WANTED sets va_active; the filesystem's answer lands in va_supported -- there is no va_set
++	 * member, and the first l543 build failed on exactly that. */
++	VATTR_WANTED(&va, va_data_size);
++	*gset = 0;
++	if (vnode_getattr(vp, &va, ctx) == 0) {
++		*fsize = (unsigned long long) va.va_data_size;
++		*gset = VATTR_IS_SUPPORTED(&va, va_data_size) ? 1U : 0U;
++	}
++	error = vn_rdwr(UIO_READ, vp, (caddr_t)(uintptr_t)out, (int)cap, 0, UIO_SYSSPACE, 0,
++	    vfs_context_ucred(ctx), &aresid, NULL);
++	if (error == 0 && aresid >= 0 && aresid <= (int)cap) {
++		*got = cap - (size_t)aresid;
++	}
++	(void) vnode_close(vp, 0, ctx);
++	return error;
++}
+ int
+ mkdirat(proc_t p, struct mkdirat_args *uap, __unused int32_t *retval)
+ {
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -8058,6 +8058,69 @@70
+ 	if (actual != device || (vfs_flags(data_mount) & MNT_RDONLY) ||
+ 	    strcmp(vfs_statfs(data_mount)->f_fstypename, "apfs")) error = EINVAL;
+ 	if (!error) native_owner_data_stage = 4;
++	if (!error) {
++		/* The Data seed is an APFS shell with no directory tree; launchd writes its log
++		 * into /private/var/log/... and cannot create the missing levels itself. Only empty
++		 * directories are made, and only when nabu-data-mkdir is set. */
++		unsigned mkdir_on = 1;
++		PE_parse_boot_argn("nabu-data-mkdir", &mkdir_on, sizeof(mkdir_on));
++		if (mkdir_on) {
++			static const char *const skeleton[] = {
++				"db", "db/timezone", "db/com.apple.xpc.launchd", "db/dslocal", "db/dslocal/nodes",
++				"db/dslocal/nodes/Default",
++				"db/dslocal/nodes/Default/users", "db/dslocal/nodes/Default/groups",
++				"db/dslocal/nodes/Default/config",
++				"containers", "containers/Data", "containers/Data/System",
++				"containers/Data/Application", "containers/Shared",
++				"containers/Shared/SystemGroup", "PersonaVolumes", "preboot", "root",
++				"tmp", "Library", "keybags", "keybags/backup",
++				"mobile", "mobile/Library", "mobile/Library/Preferences",
++				"mobile/Library/Caches", "mobile/Library/Logs",
++				"mobile/Library/Logs/CrashReporter", "mobile/Library/Logs/DiagnosticReports",
++				"mobile/Containers",
++				"mobile/Documents", "mobile/Media", "mobile/tmp",
++				"log", "log/com.apple.xpc.launchd", "run",
++			};
++			extern int nabu_kern_mkdir(const char *, int);
++			char dir_path[160];
++			unsigned made = 0, failed = 0;
++			for (unsigned i = 0; i < sizeof(skeleton) / sizeof(skeleton[0]); i++) {
++				int rc;
++				snprintf(dir_path, sizeof(dir_path), "/private/var/%s", skeleton[i]);
++				rc = nabu_kern_mkdir(dir_path, mode);
++				if (rc == 0 || rc == EEXIST) {
++					made++;
++				} else {
++					failed++;
++				}
++			}
++			printf("nabu: data skeleton created=%u failed=%u\n", made, failed);
++		}
++	}
++	if (!error) {
++		/* watchdogd's job calls __os_crash in connect_to_kext when no IOWatchdog
++		 * service is published, and launchd turns that exit into a panic. The
++		 * sheng platform layer disables the job the same way while its watchdog
++		 * backend is missing; an empty disabled.migrated selects the modern
++		 * override loader. */
++		unsigned wd_off = 1;
++		PE_parse_boot_argn("nabu-disable-watchdogd", &wd_off, sizeof(wd_off));
++		if (wd_off) {
++			static const char launchd_disabled[] =
++			    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
++			    "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" "
++			    "\"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
++			    "<plist version=\"1.0\"><dict><key>com.apple.watchdogd</key><true/></dict></plist>\n";
++			extern int nabu_kern_mkdir(const char *, int);
++			extern int nabu_kern_write_file(const char *, const char *, size_t, int);
++			int de = nabu_kern_mkdir("/private/var/db/com.apple.xpc.launchd", 0755);
++			int pe = nabu_kern_write_file("/private/var/db/com.apple.xpc.launchd/disabled.plist",
++			    launchd_disabled, sizeof(launchd_disabled) - 1, 0644);
++			int me = nabu_kern_write_file("/private/var/db/com.apple.xpc.launchd/disabled.migrated",
++			    "", 0, 0644);
++			printf("nabu: watchdogd job disabled dir=%d plist=%d marker=%d\n", de, pe, me);
++		}
++	}
+ 	if (!error) native_gpu_addon_prepare(p, scratch);
+ 	if (!error) native_staged_apps_prepare(p, scratch, data_mount);
+ done:

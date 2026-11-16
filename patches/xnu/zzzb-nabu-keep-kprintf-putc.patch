@@ -1,0 +1,16 @@
+Remove only the PE_kputc takeover that zzz-boot-progress.patch adds in PE_init_kprintf().
+With it in place early kprintf bypasses the console buffer, so the USB CDC ring is never fed
+and the serial channel goes silent once the progress page binds (measured as L103). The two
+page hooks in serial_console.c and video_console.c stay, so the page still draws while
+console output keeps flowing to the ring.
+
+--- a/pexpert/arm/pe_kprintf.c
++++ b/pexpert/arm/pe_kprintf.c
+@@ -86,7 +86,6 @@
+ static void
+ PE_init_kprintf(void)
+ {
+-	if (boot_progress_active()) { PE_kputc = boot_progress_putc; return; }
+ 	if (serial_init()) {
+ 		PE_kputc = serial_putc_crlf;
+ 	} else {

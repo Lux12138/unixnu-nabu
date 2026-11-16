@@ -1,0 +1,49 @@
+--- a/osfmk/kern/debug.c
++++ b/osfmk/kern/debug.c
+@@ -1061,6 +1061,10 @@
+ }
+ #endif /* defined (__x86_64__) */
+ 
++#if XNU_QCOM_USB_DEBUG
++#include <QcomXnuUsbDebug.h>
++#endif
++
+ #pragma clang diagnostic push
+ #pragma clang diagnostic ignored "-Wmissing-noreturn"
+ void
+@@ -1068,6 +1072,10 @@
+     uint64_t panic_options_mask, void *panic_data_ptr, unsigned long panic_caller)
+ {
+ #pragma clang diagnostic pop
++
++#if XNU_QCOM_USB_DEBUG
++	qcom_usb_debug_panic_prepare();
++#endif
+ 
+ #if defined(__x86_64__) && (DEVELOPMENT || DEBUG)
+ 	read_lbr();
+@@ -1150,6 +1158,9 @@
+ void
+ panic_spin_forever(void)
+ {
++#if XNU_QCOM_USB_DEBUG
++	qcom_usb_debug_panic_drain();
++#endif
+ 	for (;;) {
+ #if defined(__arm__) || defined(__arm64__)
+ 		/* On arm32, which doesn't have a WFE timeout, this may not return.  But that should be OK on this path. */
+--- a/osfmk/console/serial_general.c
++++ b/osfmk/console/serial_general.c
+@@ -169,7 +169,11 @@
+ 		 * if boot-arg 'drain_uart_sync=1' is set, then
+ 		 * drain all the buffer right now and append new ch
+ 		 */
+-		if (serialmode & SERIALMODE_SYNCDRAIN) {
++		/* USB logging must not inherit newline-free printbuf truncation. */
++#if !XNU_QCOM_USB_DEBUG
++		if (serialmode & SERIALMODE_SYNCDRAIN)
++#endif
++		{
+ 			info->str[info->pos] = '\0';
+ 			console_write(info->str, info->pos);
+ 			info->pos            = 0;

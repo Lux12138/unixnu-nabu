@@ -1,0 +1,657 @@
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -1192,6 +1192,15 @@
+ {
+ 	struct mach_header *mach_header = (struct mach_header *)imgp->ip_vdata;
+ 	proc_t                  p = vfs_context_proc(imgp->ip_vfs_context);
++	extern uint64_t nabu_timer_ticks(void);
++	extern uint32_t nabu_timer_deadline(void);
++	extern uint64_t nabu_irq_count(void);
++	extern uint64_t nabu_ipi_count(void);
++	extern uint32_t nabu_irqs_enabled(void);
++	extern volatile uint64_t nabu_rtclock_intr_count;
++	printf("nabu: exec> pid=%d t=%llu path=%s\n", proc_getpid(p),
++	    (unsigned long long)mach_absolute_time(),
++	    (imgp->ip_ndp && imgp->ip_ndp->ni_cnd.cn_nameptr) ? imgp->ip_ndp->ni_cnd.cn_nameptr : "-");
+ 	int                     error = 0;
+ 	task_t                  task;
+ 	task_t                  new_task = NULL; /* protected by vfexec */
+@@ -2156,6 +2165,9 @@
+ bad:
+ 	/* If we hit this, we likely would have leaked an exit reason */
+ 	assert(exec_failure_reason == OS_REASON_NULL);
++	printf("nabu: exec done pid=%d t=%llu err=%d tmr=%llu irq=%llu\n", proc_getpid(p),
++	    (unsigned long long)mach_absolute_time(), error,
++	    (unsigned long long)nabu_timer_ticks(), (unsigned long long)nabu_irq_count());
+ 	return error;
+ }
+ 
+@@ -3606,6 +3620,31 @@
+ 	/* Initialize the common data in the image_params structure */
+ 	imgp->ip_user_fname = uap->path;
+ 	imgp->ip_user_argv = uap->argv;
++	/* nabu: spawn latency, path copied here because imgp is freed on bad paths */
++	extern volatile uint64_t native_ufs_block_reads, native_ufs_read_ticks;
++	extern volatile uint64_t native_ufs_verified_blocks, native_ufs_verify_ticks;
++	extern uint64_t nabu_timer_ticks(void);
++	extern uint32_t nabu_timer_deadline(void);
++	extern uint64_t nabu_irq_count(void);
++	extern uint64_t nabu_ipi_count(void);
++	extern uint32_t nabu_irqs_enabled(void);
++	extern volatile uint64_t nabu_rtclock_intr_count;
++	char nabu_spawn_path[256];
++	size_t nabu_spawn_len = 0;
++	uint64_t nabu_spawn_t0 = 0;
++	int nabu_spawn_pid = 0;
++	nabu_spawn_path[0] = 0;
++	if (copyinstr(uap->path, nabu_spawn_path, sizeof(nabu_spawn_path) - 1, &nabu_spawn_len) == 0) {
++		nabu_spawn_path[sizeof(nabu_spawn_path) - 1] = 0;
++	} else {
++		nabu_spawn_path[0] = 0;
++	}
++	nabu_spawn_t0 = mach_absolute_time();
++	nabu_spawn_pid = proc_getpid(p);
++	printf("nabu: spawn> pid=%d t=%llu path=%s rd=%llu rt=%llu vb=%llu tmr=%llu irq=%llu\n", proc_getpid(p),
++	    (unsigned long long)nabu_spawn_t0, nabu_spawn_path,
++	    (unsigned long long)native_ufs_block_reads, (unsigned long long)native_ufs_read_ticks,
++	    (unsigned long long)native_ufs_verified_blocks, (unsigned long long)nabu_timer_ticks(), (unsigned long long)nabu_irq_count());
+ 	imgp->ip_user_envv = uap->envp;
+ 	imgp->ip_vattr = vap;
+ 	imgp->ip_origvattr = origvap;
+@@ -4027,6 +4069,7 @@
+ 	}
+ 
+ 	p = (proc_t)get_bsdthreadtask_info(imgp->ip_new_thread);
++	nabu_spawn_pid = proc_getpid(p);
+ 
+ 	if (spawn_no_exec) {
+ 		/*
+@@ -4905,6 +4948,15 @@
+ 	}
+ #endif
+ 
++	{
++		uint64_t nabu_spawn_t1 = mach_absolute_time();
++		printf("nabu: spawn err=%d t=%llu dur=%llu pid=%d path=%s rd=%llu rt=%llu vb=%llu tmr=%llu irq=%llu\n",
++		    error, (unsigned long long)nabu_spawn_t1,
++		    (unsigned long long)(nabu_spawn_t1 - nabu_spawn_t0),
++		    nabu_spawn_pid, nabu_spawn_path,
++		    (unsigned long long)native_ufs_block_reads, (unsigned long long)native_ufs_read_ticks,
++		    (unsigned long long)native_ufs_verified_blocks, (unsigned long long)nabu_timer_ticks(), (unsigned long long)nabu_irq_count());
++	}
+ 	assert(spawn_no_exec || exec_failure_reason == NULL);
+ 	return error;
+ }
+--- a/security/mac_vfs.c
++++ b/security/mac_vfs.c
+@@ -807,6 +807,16 @@
+ 	*disjoint = 0;
+ 	int error;
+ 	posix_cred_t pcred = posix_cred_get(new);
++	extern uint64_t mach_absolute_time(void);
++	extern uint64_t nabu_timer_ticks(void);
++	extern uint32_t nabu_timer_deadline(void);
++	extern uint64_t nabu_irq_count(void);
++	extern uint64_t nabu_ipi_count(void);
++	extern uint32_t nabu_irqs_enabled(void);
++	extern volatile uint64_t nabu_rtclock_intr_count;
++	uint64_t nabu_mac_t0 = mach_absolute_time();
++	uint64_t nabu_mac_tm0 = nabu_timer_ticks();
++	uint64_t nabu_mac_ir0 = nabu_irq_count();
+ 
+ #if SECURITY_MAC_CHECK_ENFORCE
+ 	/* 21167099 - only check if we allow write */
+@@ -845,9 +855,28 @@
+ 			size_t spawnattrlen = 0;
+ 			void *spawnattr = exec_spawnattr_getmacpolicyinfo(macextensions, mpc->mpc_name, &spawnattrlen);
+ 
++			{
++				extern uint64_t mach_absolute_time(void);
++				uint64_t nabu_p0 = mach_absolute_time();
++				uint64_t nabu_pt0 = nabu_timer_ticks();
++				uint64_t nabu_pi0 = nabu_irq_count();
++				uint64_t nabu_pb0 = nabu_ipi_count();
++				uint64_t nabu_pr0 = nabu_rtclock_intr_count;
+ 			error = mac_error_select(hook(cred, new, vfs_context_proc(ctx), vp, offset, scriptvp,
+ 			    mac_vnode_label(vp), scriptvnodelabel, execl, csflags, spawnattr, spawnattrlen, disjoint),
+ 			    error);
++				{
++					uint64_t nabu_pdt = mach_absolute_time() - nabu_p0;
++					if (spawnattrlen > 0 || nabu_pdt > 19200000ull) {
++						printf("nabu: macp name=%s len=%lu dt=%llu tmrd=%llu dl=%u irqd=%llu ipid=%llu rid=%llu ie=%u\n", mpc->mpc_name,
++						    (unsigned long)spawnattrlen, (unsigned long long)nabu_pdt,
++						    (unsigned long long)(nabu_timer_ticks() - nabu_pt0), nabu_timer_deadline(),
++						    (unsigned long long)(nabu_irq_count() - nabu_pi0),
++						    (unsigned long long)(nabu_ipi_count() - nabu_pb0),
++						    (unsigned long long)(nabu_rtclock_intr_count - nabu_pr0), nabu_irqs_enabled());
++					}
++				}
++			}
+ 		}
+ 		if (mac_policy_list_conditional_busy() != 0) {
+ 			for (; i <= mac_policy_list.maxindex; i++) {
+@@ -864,11 +893,47 @@
+ 				size_t spawnattrlen = 0;
+ 				void *spawnattr = exec_spawnattr_getmacpolicyinfo(macextensions, mpc->mpc_name, &spawnattrlen);
+ 
++				{
++					extern uint64_t mach_absolute_time(void);
++					uint64_t nabu_p0 = mach_absolute_time();
++					uint64_t nabu_pt0 = nabu_timer_ticks();
++					uint64_t nabu_pi0 = nabu_irq_count();
++					uint64_t nabu_pb0 = nabu_ipi_count();
++					uint64_t nabu_pr0 = nabu_rtclock_intr_count;
+ 				error = mac_error_select(hook(cred, new, vfs_context_proc(ctx), vp, offset, scriptvp,
+ 				    mac_vnode_label(vp), scriptvnodelabel, execl, csflags, spawnattr, spawnattrlen, disjoint),
+ 				    error);
++					{
++						uint64_t nabu_pdt = mach_absolute_time() - nabu_p0;
++						if (spawnattrlen > 0 || nabu_pdt > 19200000ull) {
++							printf("nabu: macp name=%s len=%lu dt=%llu tmrd=%llu dl=%u irqd=%llu ipid=%llu rid=%llu ie=%u\n", mpc->mpc_name,
++							    (unsigned long)spawnattrlen, (unsigned long long)nabu_pdt,
++							    (unsigned long long)(nabu_timer_ticks() - nabu_pt0), nabu_timer_deadline(),
++							    (unsigned long long)(nabu_irq_count() - nabu_pi0),
++							    (unsigned long long)(nabu_ipi_count() - nabu_pb0),
++							    (unsigned long long)(nabu_rtclock_intr_count - nabu_pr0), nabu_irqs_enabled());
++						}
++					}
++				}
+ 			}
+ 			mac_policy_list_unbusy();
++		}
++	}
++	{
++		uint64_t nabu_dt = mach_absolute_time() - nabu_mac_t0;
++		(void)nabu_mac_tm0; (void)nabu_mac_ir0;   /* l497: the macv row was pure volume */
++		if (nabu_dt > 19200000ull) {
++			struct mac_policy_conf *mpc2;
++			u_int j;
++			for (j = 0; j <= mac_policy_list.maxindex; j++) {
++				mpc2 = mac_policy_list.entries[j].mpc;
++				if (mpc2 == NULL || mpc2->mpc_ops == NULL ||
++				    mpc2->mpc_ops->mpo_cred_label_update_execve == NULL) {
++					continue;
++				}
++				printf("nabu: macpol name=%s hook=%p\n", mpc2->mpc_name,
++				    (void *)mpc2->mpc_ops->mpo_cred_label_update_execve);
++			}
+ 		}
+ 	}
+ 	*labelupdateerror = error;
+--- a/osfmk/arm/rtclock.c
++++ b/osfmk/arm/rtclock.c
+@@ -316,6 +316,9 @@
+ 	*info = rtclock_timebase_const;
+ }
+ 
++/* nabu: plain global, independent of cpu_data offsets: did rtclock_intr run at all? */
++volatile uint64_t nabu_rtclock_intr_count = 0;
++
+ /*
+  * Real-time clock device interrupt.
+  */
+@@ -332,6 +335,7 @@
+ 
+ 	cdp->cpu_stat.timer_cnt++;
+ 	SCHED_STATS_INC(timer_pop_count);
++	nabu_rtclock_intr_count++;
+ 
+ 	assert(!ml_get_interrupts_enabled());
+ 
+--- a/osfmk/arm/cpu_common.c
++++ b/osfmk/arm/cpu_common.c
+@@ -967,3 +967,41 @@
+ }
+ 
+ #endif /* USE_APPLEARMSMP */
++
++/*
++ * nabu: read-only views of Apple's own per-CPU counters so the exec probes can
++ * tell three cases apart: (a) decrementer interrupts never arrive, (b) no
++ * interrupts reach this CPU at all, (c) the probe reads a stale plane.
++ * All fields are from cpu_data_t.cpu_stat (cpu_stat_t in arm/cpu_data_internal.h):
++ *   irq_ex_cnt - bumped by the assembly IRQ entry (genassym.c CPU_STAT_IRQ)
++ *   ipi_cnt    - bumped in this file at cpu_common.c:581
++ */
++uint64_t
++nabu_timer_ticks(void)
++{
++	return getCpuDatap()->cpu_stat.timer_cnt;
++}
++
++uint32_t
++nabu_timer_deadline(void)
++{
++	return getCpuDatap()->cpu_decrementer;
++}
++
++uint64_t
++nabu_irq_count(void)
++{
++	return getCpuDatap()->cpu_stat.irq_ex_cnt;
++}
++
++uint64_t
++nabu_ipi_count(void)
++{
++	return getCpuDatap()->cpu_stat.ipi_cnt;
++}
++
++uint32_t
++nabu_irqs_enabled(void)
++{
++	return ml_get_interrupts_enabled() ? 1u : 0u;
++}
+--- a/security/mac_vfs.c
++++ b/security/mac_vfs.c
+@@ -808,6 +808,10 @@
+ 	int error;
+ 	posix_cred_t pcred = posix_cred_get(new);
+ 	extern uint64_t mach_absolute_time(void);
++	extern uint32_t nabu_gicd_ctlr(void), nabu_gicr_waker(void), nabu_gicr_isen(void), nabu_gicr_igroupr0(void);
++	extern uint32_t nabu_icc_sre(void), nabu_icc_pmr(void), nabu_icc_igrpen1(void);
++	extern uint32_t nabu_gicr_affinity(void), nabu_cntv_ctl(void), nabu_gicr_typer(uint32_t);
++	extern uint64_t nabu_cntv_tval(void), nabu_mpidr(void);
+ 	extern uint64_t nabu_timer_ticks(void);
+ 	extern uint32_t nabu_timer_deadline(void);
+ 	extern uint64_t nabu_irq_count(void);
+@@ -868,12 +872,17 @@
+ 				{
+ 					uint64_t nabu_pdt = mach_absolute_time() - nabu_p0;
+ 					if (spawnattrlen > 0 || nabu_pdt > 19200000ull) {
+-						printf("nabu: macp name=%s len=%lu dt=%llu tmrd=%llu dl=%u irqd=%llu ipid=%llu rid=%llu ie=%u\n", mpc->mpc_name,
++						printf("nabu: macp name=%s len=%lu dt=%llu tmrd=%llu dl=%u irqd=%llu ipid=%llu rid=%llu ie=%u gic=%08x/%08x/%08x/%08x i=%x/%x/%x cv=%x/%llx ta=%x ty=%x/%x/%x/%x mp=%llx\n", mpc->mpc_name,
+ 						    (unsigned long)spawnattrlen, (unsigned long long)nabu_pdt,
+ 						    (unsigned long long)(nabu_timer_ticks() - nabu_pt0), nabu_timer_deadline(),
+ 						    (unsigned long long)(nabu_irq_count() - nabu_pi0),
+ 						    (unsigned long long)(nabu_ipi_count() - nabu_pb0),
+-						    (unsigned long long)(nabu_rtclock_intr_count - nabu_pr0), nabu_irqs_enabled());
++						    (unsigned long long)(nabu_rtclock_intr_count - nabu_pr0), nabu_irqs_enabled(),
++						    nabu_gicd_ctlr(), nabu_gicr_waker(), nabu_gicr_isen(), nabu_gicr_igroupr0(),
++						    nabu_icc_sre(), nabu_icc_pmr(), nabu_icc_igrpen1(),
++						    nabu_cntv_ctl(), (unsigned long long)nabu_cntv_tval(), nabu_gicr_affinity(),
++						    nabu_gicr_typer(0), nabu_gicr_typer(1), nabu_gicr_typer(2), nabu_gicr_typer(3),
++						    (unsigned long long)nabu_mpidr());
+ 					}
+ 				}
+ 			}
+@@ -906,12 +915,17 @@
+ 					{
+ 						uint64_t nabu_pdt = mach_absolute_time() - nabu_p0;
+ 						if (spawnattrlen > 0 || nabu_pdt > 19200000ull) {
+-							printf("nabu: macp name=%s len=%lu dt=%llu tmrd=%llu dl=%u irqd=%llu ipid=%llu rid=%llu ie=%u\n", mpc->mpc_name,
++							printf("nabu: macp name=%s len=%lu dt=%llu tmrd=%llu dl=%u irqd=%llu ipid=%llu rid=%llu ie=%u gic=%08x/%08x/%08x/%08x i=%x/%x/%x cv=%x/%llx ta=%x ty=%x/%x/%x/%x mp=%llx\n", mpc->mpc_name,
+ 							    (unsigned long)spawnattrlen, (unsigned long long)nabu_pdt,
+ 							    (unsigned long long)(nabu_timer_ticks() - nabu_pt0), nabu_timer_deadline(),
+ 							    (unsigned long long)(nabu_irq_count() - nabu_pi0),
+ 							    (unsigned long long)(nabu_ipi_count() - nabu_pb0),
+-							    (unsigned long long)(nabu_rtclock_intr_count - nabu_pr0), nabu_irqs_enabled());
++							    (unsigned long long)(nabu_rtclock_intr_count - nabu_pr0), nabu_irqs_enabled(),
++							    nabu_gicd_ctlr(), nabu_gicr_waker(), nabu_gicr_isen(), nabu_gicr_igroupr0(),
++							    nabu_icc_sre(), nabu_icc_pmr(), nabu_icc_igrpen1(),
++							    nabu_cntv_ctl(), (unsigned long long)nabu_cntv_tval(), nabu_gicr_affinity(),
++							    nabu_gicr_typer(0), nabu_gicr_typer(1), nabu_gicr_typer(2), nabu_gicr_typer(3),
++							    (unsigned long long)nabu_mpidr());
+ 						}
+ 					}
+ 				}
+--- a/osfmk/arm/cpu_common.c
++++ b/osfmk/arm/cpu_common.c
+@@ -1005,3 +1005,200 @@
+ {
+ 	return ml_get_interrupts_enabled() ? 1u : 0u;
+ }
++
++
++/*
++ * nabu: read-only GICv3 state for the exec probes.  Nothing here writes to the
++ * GIC; the values tell us whether the interrupt controller is actually armed.
++ *   GICD  0x17a00000 (0x10000)   GICR 0x17a60000 (0x100000), stride 0x20000
++ *   (from dts/nabu-full.dts interrupt-controller@17a00000)
++ */
++static vm_offset_t nabu_gicd_base;
++static vm_offset_t nabu_gicr_base;
++static vm_offset_t nabu_gicr_region;
++static uint64_t nabu_gicr_phys;
++static uint32_t nabu_gicr_aff;
++
++/*
++ * GICR frames are not guaranteed to be in affinity order (l425 read a frame that
++ * was never written while ICC/GICD clearly were): pick the frame whose
++ * GICR_TYPER affinity matches this core's MPIDR, exactly like the platform kext.
++ */
++static vm_offset_t
++nabu_gicr_pick(vm_offset_t base, uint64_t size)
++{
++	uint64_t mpidr = __builtin_arm_rsr64("MPIDR_EL1");
++	uint32_t want = (uint32_t)((mpidr & 0xffffffULL) | ((mpidr >> 8) & 0xff000000ULL));
++
++	for (uint64_t off = 0; off + 0x20000 <= size; off += 0x20000) {
++		uint64_t typer = *(volatile uint64_t *)(base + off + 0x8);
++		if ((uint32_t)(typer >> 32) == want) {
++			nabu_gicr_aff = (uint32_t)(typer >> 32);
++			return base + off;
++		}
++		if ((typer & 0x10ULL) != 0) {
++			break;
++		}
++	}
++	return base;
++}
++
++static void
++nabu_gic_map(void)
++{
++	vm_offset_t region;
++	uint32_t override = 0;
++	extern int PE_parse_boot_argn(const char *arg_string, void *arg_ptr, int max_len);
++
++	if (nabu_gicd_base != 0) {
++		return;
++	}
++	if (PE_parse_boot_argn("nabu-gicr-base", &override, sizeof(override)) != 1) {
++		override = 0;
++	}
++	nabu_gicr_phys = override ? (uint64_t)override : 0x17a60000ULL;
++	nabu_gicd_base = ml_io_map(0x17a00000ULL, 0x10000ULL);
++	region = ml_io_map(nabu_gicr_phys, 0x100000ULL);
++	nabu_gicr_region = region;
++	nabu_gicr_base = region ? nabu_gicr_pick(region, 0x100000ULL) : 0;
++}
++
++static uint32_t
++nabu_gic_read(uint32_t which)
++{
++	if (nabu_gicd_base == 0) {
++		nabu_gic_map();
++	}
++	switch (which) {
++	case 0: /* GICD_CTLR */
++		return nabu_gicd_base ? *(volatile uint32_t *)(nabu_gicd_base + 0x0000) : 0xdead0000;
++	case 1: /* GICR_WAKER */
++		return nabu_gicr_base ? *(volatile uint32_t *)(nabu_gicr_base + 0x0014) : 0xdead0001;
++	case 2: /* GICR_ISENABLER0 (SGI_base = frame + 0x10000) */
++		return nabu_gicr_base ? *(volatile uint32_t *)(nabu_gicr_base + 0x10000 + 0x0100) : 0xdead0002;
++	case 3: /* GICR_IGROUPR0 (SGI_base) */
++		return nabu_gicr_base ? *(volatile uint32_t *)(nabu_gicr_base + 0x10000 + 0x0080) : 0xdead0003;
++	case 4: /* GICR_CTLR (RD_base) */
++		return nabu_gicr_base ? *(volatile uint32_t *)(nabu_gicr_base + 0x0000) : 0xdead0008;
++	default: /* GICR_IGRPMODR0 (SGI_base) */
++		return nabu_gicr_base ? *(volatile uint32_t *)(nabu_gicr_base + 0x10000 + 0x0d00) : 0xdead0009;
++	}
++}
++
++uint32_t
++nabu_gicr_ctlr(void)
++{
++	return nabu_gic_read(4);
++}
++
++uint32_t
++nabu_gicr_igrpmodr0(void)
++{
++	return nabu_gic_read(5);
++}
++
++uint32_t
++nabu_gicd_ctlr(void)
++{
++	return nabu_gic_read(0);
++}
++
++uint32_t
++nabu_gicr_waker(void)
++{
++	return nabu_gic_read(1);
++}
++
++uint32_t
++nabu_gicr_isen(void)
++{
++	return nabu_gic_read(2);
++}
++
++uint32_t
++nabu_gicr_igroupr0(void)
++{
++	return nabu_gic_read(3);
++}
++
++/* ICC_* are undefined if the system-register interface is off: check SRE first. */
++uint32_t
++nabu_icc_sre(void)
++{
++	return (uint32_t)__builtin_arm_rsr64("ICC_SRE_EL1");
++}
++
++uint32_t
++nabu_icc_pmr(void)
++{
++	if ((nabu_icc_sre() & 1) == 0) {
++		return 0xdead0004;
++	}
++	return (uint32_t)__builtin_arm_rsr64("ICC_PMR_EL1");
++}
++
++uint32_t
++nabu_icc_igrpen1(void)
++{
++	if ((nabu_icc_sre() & 1) == 0) {
++		return 0xdead0005;
++	}
++	return (uint32_t)__builtin_arm_rsr64("ICC_IGRPEN1_EL1");
++}
++
++/* Which GICR frame the readback above came from (0 = fallback: first frame). */
++uint32_t
++nabu_gicr_affinity(void)
++{
++	nabu_gic_map();
++	return nabu_gicr_aff;
++}
++
++/* This core's MPIDR and the TYPER affinity word of redistributor frame `index`. */
++uint64_t
++nabu_mpidr(void)
++{
++	return __builtin_arm_rsr64("MPIDR_EL1");
++}
++
++uint32_t
++nabu_gicr_typer(uint32_t index)
++{
++	nabu_gic_map();
++	if (nabu_gicr_region == 0 || index > 3) {
++		return 0xdeadbeefU;
++	}
++	return *(volatile uint32_t *)(nabu_gicr_region + (uint64_t)index * 0x20000ULL + 0xC);
++}
++
++/* CPU-interface view: is the pending PPI visible to this core, and what is running? */
++uint32_t
++nabu_icc_hppir1(void)
++{
++	if ((nabu_icc_sre() & 1) == 0) {
++		return 0xdead0006;
++	}
++	return (uint32_t)__builtin_arm_rsr64("ICC_HPPIR1_EL1");
++}
++
++uint32_t
++nabu_icc_rpr(void)
++{
++	if ((nabu_icc_sre() & 1) == 0) {
++		return 0xdead0007;
++	}
++	return (uint32_t)__builtin_arm_rsr64("ICC_RPR_EL1");
++}
++
++/* Virtual timer state: bit0 ENABLE, bit1 IMASK, bit2 ISTATUS; TVAL = ticks to go. */
++uint32_t
++nabu_cntv_ctl(void)
++{
++	return (uint32_t)__builtin_arm_rsr64("CNTV_CTL_EL0");
++}
++
++uint64_t
++nabu_cntv_tval(void)
++{
++	return (uint64_t)__builtin_arm_rsr64("CNTV_TVAL_EL0");
++}
+--- a/security/mac_vfs.c
++++ b/security/mac_vfs.c
+@@ -808,7 +808,9 @@
+ 	int error;
+ 	posix_cred_t pcred = posix_cred_get(new);
+ 	extern uint64_t mach_absolute_time(void);
++	extern void nabu_gic_kick(void);
+ 	extern uint32_t nabu_gicd_ctlr(void), nabu_gicr_waker(void), nabu_gicr_isen(void), nabu_gicr_igroupr0(void);
++	nabu_gic_kick();
+ 	extern uint32_t nabu_icc_sre(void), nabu_icc_pmr(void), nabu_icc_igrpen1(void);
+ 	extern uint32_t nabu_gicr_affinity(void), nabu_cntv_ctl(void), nabu_gicr_typer(uint32_t);
+ 	extern uint64_t nabu_cntv_tval(void), nabu_mpidr(void);
+--- a/osfmk/arm/cpu_common.c
++++ b/osfmk/arm/cpu_common.c
+@@ -1202,3 +1202,142 @@
+ {
+ 	return (uint64_t)__builtin_arm_rsr64("CNTV_TVAL_EL0");
+ }
++
++
++/*
++ * nabu: kernel-side GICv3 bring-up, gated behind "nabu-gic-kick=1".
++ * Same register values as ArmCpu::enableGic(); idempotent.  Needed when the
++ * platform kext never reaches enableGic() (ArmCpu::start() bails out if
++ * prepareGic() fails), in which case the CPU interface stays closed and no
++ * interrupt - including the virtual timer PPI 27 - is ever signalled.
++ */
++extern int PE_parse_boot_argn(const char *arg_string, void *arg_ptr, int max_len);
++extern uint64_t mach_absolute_time(void);
++
++static int nabu_gic_kick_done;
++
++static boolean_t
++nabu_gic_wait_rwp(volatile uint32_t *ctlr)
++{
++	uint64_t deadline = mach_absolute_time() + 19200000ULL * 2;
++	while ((*ctlr & (1U << 31)) != 0) {
++		if (mach_absolute_time() > deadline) {
++			return FALSE;
++		}
++	}
++	return TRUE;
++}
++
++void
++nabu_gic_kick(void)
++{
++	int on = 0;
++	uint32_t ctl, waker;
++	volatile uint32_t *gicd;
++	volatile uint32_t *gicr;
++	uint64_t deadline;
++
++	if (nabu_gic_kick_done != 0) {
++		return;
++	}
++	if (PE_parse_boot_argn("nabu-gic-kick", &on, sizeof(on)) != 1 || on == 0) {
++		return;
++	}
++	nabu_gic_kick_done = 1;
++
++	nabu_gic_map();
++	if (nabu_gicd_base == 0 || nabu_gicr_base == 0) {
++		printf("nabu: gic-kick map failed gd=%lx gr=%lx\n",
++		    (unsigned long)nabu_gicd_base, (unsigned long)nabu_gicr_base);
++		return;
++	}
++	gicd = (volatile uint32_t *)nabu_gicd_base;
++	gicr = (volatile uint32_t *)nabu_gicr_base;
++
++	/*
++	 * Never unmask an interrupt source unless the CPU has a handler installed:
++	 * sleh_irq() calls cdp->interrupt_handler unconditionally.
++	 */
++	if (getCpuDatap()->interrupt_handler == NULL) {
++		printf("nabu: gic-kick skipped, no handler gd=%08x i=%x/%x/%x cv=%x/%llx\n",
++		    gicd[0], nabu_icc_sre(), nabu_icc_pmr(), nabu_icc_igrpen1(),
++		    (uint32_t)__builtin_arm_rsr64("CNTV_CTL_EL0"),
++		    (unsigned long long)__builtin_arm_rsr64("CNTV_TVAL_EL0"));
++		return;
++	}
++
++	/* Locate the live redistributor: scan 0x17a00000..0x17c00000 step 0x20000 and report
++	 * the first frame whose GICR_TYPER is present (a dead/unmapped page reads 0). */
++	{
++		vm_offset_t scan_base = ml_io_map(0x17a00000ULL, 0x200000ULL);
++		uint64_t found = 0;
++		uint32_t ftyper = 0;
++
++		if (scan_base != 0) {
++			for (uint64_t off = 0x60000; off < 0x200000; off += 0x20000) {
++				uint64_t t = *(volatile uint64_t *)(scan_base + off + 0x8);
++				if (t != 0 && t != 0xffffffffffffffffULL) {
++					found = 0x17a00000ULL + off;
++					ftyper = (uint32_t)(t >> 32);
++					break;
++				}
++			}
++			printf("nabu: gic-scan pid=%08x found=%llx aff=%08x\n",
++			    *(volatile uint32_t *)(scan_base + 0xfe8),
++			    (unsigned long long)found, ftyper);
++		} else {
++			printf("nabu: gic-scan map failed\n");
++		}
++	}
++
++	ctl = gicd[0];
++	gicd[0] = ctl & ~3U;
++	(void)nabu_gic_wait_rwp(gicd);
++	gicd[0] = (ctl & ~3U) | 16U;
++	(void)nabu_gic_wait_rwp(gicd);
++	gicd[0] = (ctl & ~3U) | 16U | 2U;
++	(void)nabu_gic_wait_rwp(gicd);
++
++	waker = gicr[0x14 / 4];
++	gicr[0x14 / 4] = waker & ~2U;
++	deadline = mach_absolute_time() + 19200000ULL * 2;
++	while ((gicr[0x14 / 4] & 4U) != 0) {
++		if (mach_absolute_time() > deadline) {
++			break;
++		}
++	}
++
++	/* Group 1 = bit set. The timer PPI must be group 1 so it arrives as IRQ (our IRQ path calls rtclock_intr). */
++	gicr[(0x10000 + 0x80) / 4] = gicr[(0x10000 + 0x80) / 4] | (1U << 27);
++	gicr[(0x10000 + 0x100) / 4] = (1U << 27) | 0xffffU;
++
++	if ((nabu_icc_sre() & 1U) == 0) {
++		__builtin_arm_wsr64("ICC_SRE_EL1", 1);
++		__builtin_arm_isb(ISB_SY);
++	}
++	__builtin_arm_wsr64("ICC_CTLR_EL1", __builtin_arm_rsr64("ICC_CTLR_EL1") & ~2ULL);
++	__builtin_arm_wsr64("ICC_BPR1_EL1", 0);
++	__builtin_arm_wsr64("ICC_PMR_EL1", 0xff);
++	__builtin_arm_wsr64("ICC_IGRPEN1_EL1", 1);
++	__builtin_arm_isb(ISB_SY);
++
++	/* Force the virtual timer to assert: enable, unmask, arm 1 ms (19200 @19.2 MHz). */
++	{
++		uint64_t ctl = __builtin_arm_rsr64("CNTV_CTL_EL0");
++		ctl |= 1ULL;
++		ctl &= ~2ULL;
++		__builtin_arm_wsr64("CNTV_CTL_EL0", ctl);
++		__builtin_arm_isb(ISB_SY);
++		__builtin_arm_wsr64("CNTV_TVAL_EL0", 19200ULL);
++		__builtin_arm_isb(ISB_SY);
++	}
++
++	printf("nabu: gic-kick gb=%llx h=%p ty=%08x gd=%08x gw=%08x ge=%08x gg=%08x gc=%08x gm=%08x i=%x/%x/%x hp=%x rp=%x cv=%x/%llx\n",
++	    (unsigned long long)nabu_gicr_phys, (void *)getCpuDatap()->interrupt_handler, nabu_gicr_aff,
++	    gicd[0], gicr[0x14 / 4], gicr[(0x10000 + 0x100) / 4], gicr[(0x10000 + 0x80) / 4],
++	    nabu_gicr_ctlr(), nabu_gicr_igrpmodr0(),
++	    nabu_icc_sre(), nabu_icc_pmr(), nabu_icc_igrpen1(),
++	    nabu_icc_hppir1(), nabu_icc_rpr(),
++	    (uint32_t)__builtin_arm_rsr64("CNTV_CTL_EL0"),
++	    (unsigned long long)__builtin_arm_rsr64("CNTV_TVAL_EL0"));
++}
