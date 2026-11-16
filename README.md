@@ -15,18 +15,22 @@
 | 触摸输入 | 完成 — 实测 `fingers 4→436`，client = `backboardd` |
 | GPU scanout 接管 | 完成 — l771，`P4/PF` 生效 |
 | **流畅度** | **未完成** — `present` 均值 221 ms，尾帧 844 ms |
+| **外设驱动** | **多数未实现** — 电源/音频/Wi-Fi/按键/摄像头/指纹/SEP 均缺 |
 
 **桌面截图（l769 实机，800×1280）**
 
 ![Home Screen](docs/screenshots/desktop-l769.png)
 
-**锁屏截图（l750 实机）**
+**锁屏截图（l730 实机，带系统壁纸）**
 
-![Lockscreen](docs/screenshots/lockscreen-l750.png)
+![Lockscreen](docs/screenshots/lockscreen-l730.png)
 
-> 剩余工作是**帧率**，不是「能不能开机」。
-> 当前显示路径是「原生 GPU 合成 + 每帧 CPU 16 MiB blit 到 GOP」，
-> 理论上限约 3.5–7 fps。要真正流畅需要让 GPU/DPU 接管最终搬运。
+> 开机与桌面只是**第一个里程碑**，不是终点。当前显示路径是
+> 「原生 GPU 合成 + 每帧 CPU 16 MiB blit 到 GOP」，理论上限约 3.5–7 fps。
+>
+> 除此之外还有大量驱动未实现：**电源管理（PMIC/RPMh/DVFS）、音频（ADSP/codec）、
+> Wi-Fi、物理按键、摄像头、蓝牙/GPS、指纹、SEP**，以及持久化 Data 卷与
+> 背光控制。完整清单与排序见下面的[路线图](#路线图已完成什么还缺什么)。
 
 ---
 
@@ -101,7 +105,7 @@ ToHome · UI Locked:NO · 无 ForceLockKey · 主屏图标 + 壁纸 + Dock
 | `configs/` | 两个 defconfig |
 | `tools/` | 板侧构建与采集脚本 |
 | `board.toml` | 板级配置，**保留逐轮编辑历史**（`board.toml.history` 为历史快照） |
-| `docs/screenshots/` | 实机桌面与锁屏 |
+| `docs/screenshots/` | 实机桌面（l769）与锁屏（l730） |
 | `CURRENT-STATE.md` | **权威状态摘要，与旧文档冲突时以它为准** |
 | `DOCS-INDEX.md` | 文档索引 |
 
@@ -329,32 +333,70 @@ darwinboot-memory-size  = 0x20000000    512 MiB 连续窗口
 
 ---
 
-## 下一步（2026-11-16）
+## 路线图：已完成什么、还缺什么
 
-**功能性目标已达成，剩余是流畅度。** 按判别力排序：
+**开机与桌面不是终点，只是第一个里程碑。** 下面的清单按「能力域」组织，
+每项都标注是已落地、部分完成还是完全没有。
 
-1. **定位 present 长尾**：当前 `present` 均值 221 ms、尾帧 844 ms，且
-   启动期 pipeline compile 与长尾共现，因果未分离。需要无触摸的稳态数据
-   才能判断是 GPU 频率、GOP UC 映射还是 CA 提交节奏。
-2. **核实 Metal 完成等待是否存在死锁**：上游同 SoC 方案
-   ([`zzweiqing/UniXNU-nabu`](https://github.com/zzweiqing/UniXNU-nabu))
-   定位到 `dispatch_group_wait(_handlers, DISPATCH_TIME_FOREVER)` 会在
-   两种情况下死锁——投递批次排在本调用者之后，或 handler 等自己的 buffer。
-   其补丁（26 行）已打包但尚未在该项目上板验证。本项目尚未核对自身实现
-   是否有同样模式。
-3. **补遥测完整性**：CDC 目前是原始字节流，48.6 s 黑洞只能靠时间跳变反推。
-   上游方案（`NABULOG2`）带 CRC、序号、boot/build id 与丢包计数，
-   可直接判定「丢了没、丢多少、从哪丢」。
-4. **扩展到 335 s 之后**：当前三条通道在该区间全空，而 WDT 咬点在
-   380–410 s，正好是最有价值的窗口。可行方向是修 CDC 重连（成本最低）
-   或把 `diagAt1` 后移（但 400/500 已被证明会早死，300 是实测临界点）。
-5. **桌面持久化**：当前是临时轮（一次性包），未固化到默认 args 或编译侧。
+### 已完成
+
+| 能力 | 状态 | 依据 |
+|---|---|---|
+| 内核启动 → 用户态（launchd） | ✅ | l730 之前完成 |
+| 系统 UI（锁屏） | ✅ | l730：`Migration not necessary` + `finishedStartup:YES` |
+| **原生 Home Screen** | ✅ | l769：`ToHome` / `UI Locked:NO` / 无 `ForceLockKey` |
+| 触摸输入 | ✅ | `NT36523`，`fingers 4→436`，client = `backboardd` |
+| GPU 合成 + scanout 接管 | ✅ | l771：`P4/PF` 生效，GPU 服务 6 帧 |
+| DPU 直出通路 | ✅ 已证可行 | `native_ufs_dpu_state` bit31 + `mode=2` |
+| 8 核 SMP | ✅ | 7 个副核全部 `st=7 running` |
+| UFS 根卷 + RAM Data | ✅ | APFS 只读根 + `nabuvar` |
+| 无人值守复位 | ✅ | `pet=600` + `pon 0x80041` 自动回 TWRP |
+
+### 进行中 / 部分完成
+
+| 能力 | 状态 | 缺口 |
+|---|---|---|
+| **流畅度** | ⚠️ 0% | `present` 均值 221 ms、尾帧 844 ms；理论上限 3.5–7 fps |
+| GPU 频率策略 | ⚠️ 缺 | GMU 频率策略未实现，当前非最优档 |
+| 背光控制 | ⚠️ 缺 | `backlight factor:0` 只有默认值 |
+| 持久化 Data | ⚠️ 部分 | 只有 RAM 种子，掉电即失 |
+| 诊断完整性 | ⚠️ 部分 | CDC 无 CRC/序号；335 s 后无通道 |
+
+### 完全未实现（缺驱动，按难度排序）
+
+| 能力域 | 缺什么 | 难度 |
+|---|---|---|
+| **电源管理** | 只有 stub：缺 PMIC、RPMh、regulator 树、CPU DVFS（EPSS）、电池电量计 | 高（牵动全局） |
+| **音频** | 全部：SM8150 ADSP、codec、clock fabric 均未盘 | 高 |
+| **网络（Wi-Fi）** | 全部：硬件清单与固件处理都没有 | 高 |
+| **物理按键** | 按键与 key event 未接 | 中 |
+| **摄像头** | 未开始 | 高 |
+| **蓝牙 / GPS** | 未开始 | 中 |
+| **指纹** | 未开始 | 高 |
+| **SEP / 安全隔区** | 无 SEP，因此无法登录 Apple ID、无蜂窝 | 极高（需硬件级） |
+| **存储高级特性** | 持久写入、多 LUN、UFS 错误恢复、power collapse | 中 |
+| **SMMU 故障恢复** | 只做映射，未做 fault recovery | 中 |
+
+### 所以「下一步」按判别力排序
+
+1. **流畅度**（唯一影响可用性的功能项）
+   - 分离 `present` 长尾因果：启动期 pipeline compile 与长尾共现，需无触摸稳态数据
+   - 核实 Metal 完成等待是否存在死锁：上游同 SoC 方案定位到
+     `dispatch_group_wait(_handlers, DISPATCH_TIME_FOREVER)` 的两种死锁场景，
+     其补丁 26 行已打包但未上板验证；本项目尚未核对自身实现
+2. **电源管理**（后面所有驱动的前置）
+   - 没有 regulator/DVFS，GPU 和 CPU 都跑不到最优档，这本身也是流畅度的一部分
+3. **持久化 Data**（决定能不能当日常设备用）
+4. **诊断完整性**（决定后续调试效率）
+   - CDC 加 CRC/序号/丢包计数，消除 48.6 s 黑洞只能靠时间跳变反推的现状
+   - 把覆盖延到 335 s 之后（WDT 咬点在 380–410 s）
+5. **外设**：按键 → 音频 → Wi-Fi → 蓝牙/GPS → 摄像头 → 指纹
 
 ### 已否证的方向（别再试）
 
 | 方向 | 结论 |
 |---|---|
-| `nanu-gpu-scanout=1` | 数学上必然失效：GOP `0x9c000000+0xfa0000` 落在 DRAM 管理区内部 |
+| `nabu-gpu-scanout=1` | 数学上必然失效：GOP `0x9c000000+0xfa0000` 落在 DRAM 管理区内部 |
 | `adrenoprobed` | 未被 launchd 加载，且只导 `oslog.txt.gz` |
 | `PF/PX/P0..P4 = 0` 当失败判据 | 走 GPU7 标记流，本内核 capture hook 是空实现 |
 | `ncpy = 0` 当零拷贝证据 | 已撤回 |
