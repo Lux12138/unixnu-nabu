@@ -103,11 +103,12 @@ ToHome · UI Locked:NO · 无 ForceLockKey · 主屏图标 + 壁纸 + Dock
 | `board-run/rounds/` | **135 份结构化轮次 JSON**（到 l738，之后改用板报形式） |
 | `board-run/state/` | 主交接文档（3,641 行）+ 板侧作业铁律 |
 | `configs/` | 两个 defconfig |
-| `tools/` | 板侧构建与采集脚本 |
+| `tools/` | 板侧构建与采集脚本（33 个，含 `make-cust-payload.sh` / `inject-early-marks.sh`） |
 | `board.toml` | 板级配置，**保留逐轮编辑历史**（`board.toml.history` 为历史快照） |
 | `docs/screenshots/` | 实机桌面（l769）与锁屏（l730） |
 | `CURRENT-STATE.md` | **权威状态摘要，与旧文档冲突时以它为准** |
-| `DOCS-INDEX.md` | 文档索引 |
+| `DOCS-INDEX.md` | 文档索引（**只需读 README + CURRENT-STATE**） |
+| `docs/history/` | 已作废的旧路线文档（2026-10-2x），仅作追溯 |
 
 ---
 

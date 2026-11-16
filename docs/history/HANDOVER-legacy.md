@@ -1,5 +1,17 @@
 # UniXNU on Xiaomi Pad 5 (nabu / SM8150) — 完整交接文档
 
+> ## ⚠️ 历史文档（已作废）
+>
+> 本文写于 2026-10-2x，属于**已被取代的旧路线**。其中的「当前状态」「下一步」
+> 「卡在哪里」全部失效，不要按它行事。
+>
+> **当前状态一律以 [`CURRENT-STATE.md`](../../CURRENT-STATE.md) 为准。**
+> 项目已达成原生桌面（l769），剩余工作是流畅度与外设驱动。
+>
+> 保留本文仅作追溯：为什么当初选了某条路、踩过哪些坑。
+
+---
+
 > 状态：**XNU 内核已在真机上进入执行**（DarwinBoot `exiting boot services` → `hand-off to the kernel`）
 > 当前工作：给内核装"可见性探针"（把黑箱变白箱）。
 > ✅ 注入链路已修好并 **CI 跑通**（UniXNU `0c4e9a1` / unixnu-nabu `b7642cf`，run `39612555624` success，
