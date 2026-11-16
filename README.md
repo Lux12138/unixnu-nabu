@@ -103,7 +103,7 @@ ToHome · UI Locked:NO · 无 ForceLockKey · 主屏图标 + 壁纸 + Dock
 | `board-run/rounds/` | **135 份结构化轮次 JSON**（到 l738，之后改用板报形式） |
 | `board-run/state/` | 主交接文档（3,641 行）+ 板侧作业铁律 |
 | `configs/` | 两个 defconfig |
-| `tools/` | 板侧构建与采集脚本（33 个，含 `make-cust-payload.sh` / `inject-early-marks.sh`） |
+| `tools/` | 板侧构建与采集脚本，另含 `tools/linux/` 的 Darwin 交叉工具链安装器（`setup-toolchain.py` + 8 个 shim + 2 个补丁） |
 | `board.toml` | 板级配置，**保留逐轮编辑历史**（`board.toml.history` 为历史快照） |
 | `docs/screenshots/` | 实机桌面（l769）与锁屏（l730） |
 | `CURRENT-STATE.md` | **权威状态摘要，与旧文档冲突时以它为准** |
@@ -224,7 +224,21 @@ UFS 探测        nabu_ufs_register_probe.cpp
 sha256          c756ecdb88a9dd50156dc27d2cdf48a08ddf93fcf204040fa57804f814fc3c15
 ```
 
-工具链来自 [`Allenwdk/xnu-linux-toolchain`](https://github.com/Allenwdk/xnu-linux-toolchain)。
+**工具链自备**：`tools/linux/setup-toolchain.py`（一次 `sudo` 运行）在 Linux 主机上装齐
+内核步骤需要的全套 Darwin 交叉工具：
+
+| 组件 | 说明 |
+|---|---|
+| `clang`（打补丁） | 带 `__builtin_xnu_type_*`（`llvm-xnu-builtin-type.patch`）。xnu 的 `kalloc_type` 签名没有它就没有 fallback |
+| `cctools-port` 1030.6.3-ld64-956.6 | `ld64` / `libtool` / `nm` / `lipo`。**必须用这个版本**——上游 master 的 `ld64-609` 会损坏内核链接 |
+| `mig` | 来自 `bootstrap_cmds` |
+| `iig-port` | 作为 `iig`（`iig-port-darwin-target.patch`） |
+| `lzfse` | 解内核缓存 |
+| 8 个 shim | 还原 CLT/Xcode 的目录布局：`xcrun` / `codesign` / `plutil`（Python plistlib 后端）/ `install`（BSD 语义）/ `gm4`（GNU m4 的 Apple 名）/ `cc` / `clang++` / `TargetConditionals.h` |
+
+依赖走 `apt` / `dnf` / `pacman` / `zypper`，或预配置环境。
+
+原始参考：[`Allenwdk/xnu-linux-toolchain`](https://github.com/Allenwdk/xnu-linux-toolchain)
 
 ### 打通 Linux 时踩的 18 个坑
 
