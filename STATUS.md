@@ -16,7 +16,7 @@
 | 系统 UI（锁屏） | ✅ 100% | 真 iPadOS 锁屏，彩色壁纸 | l730 / l750 |
 | **桌面（Home Screen）** | ✅ **100%** | **os_log 官方交还事件** | **l769** |
 | 触摸 / 手势送达 | ✅ 100% | `destinations: { SpringBoard.27 }` | l752–l754 |
-| GPU scanout 接管 | ✅ 功能闭合 | `import_stage=19`、`ncpy=0` | l770 + l771 |
+| GPU scanout 接管 | ✅ 功能闭合 | `P4/PF` 生效、`import_stage=19` | l770 + l771 |
 | **流畅度（帧率 / 延迟）** | ❌ **0%** | 1.18 fps，ctc 长尾 817 ms | **进行中** |
 
 ## 桌面已达成的证据（2026-11-16 复核）

@@ -40,20 +40,20 @@ screen.bgrx                    : ff868216 全屏锁屏 53856 色
 
 包：`kernel d3598dd6` / `payload 3876e1a2` / args `700/39`。
 
-### 1.2 l738 / l750：DPU 直出
+### 1.2 l738 / l750：DPU 直出——可行性已证，实现未落地
 
-`NativeLegacyDisplay::startDirect()` 写 VIG0（`0xae05000`）已被证实可行。
 l737 的 `data abort (esr 0x96000010)` 是探针地址写错（`0xae004000`，
-比真 VIG0 低 0x1000），不是 DPU 不可用。
-
-纯数据修复即可打开：
+比真 VIG0 `0xae05000` 低 0x1000），不是 DPU 不可用；两个数据门也确实存在：
 
 ```
 native_ufs_dpu_state = 0x80000000   (bit31)
 mode = 2
 ```
 
-l750 用 `9011f295` 内核画出完整原生 iPadOS 锁屏。
+**但直出路径当前不工作**：`native_ufs_dpu_map()` 仍是返回 0 的桩、
+`native_ufs_dpu_state=0`，`startDirect()` 的入口条件
+（`mode>=2 && &map && &state && (state>>31)`）永不成立，`directOn` 恒 false。
+l750 用 `9011f295` 内核画出的锁屏来自既有 CPU/GPU 路径，不是直出帧。
 **注意：`ncpy=0` 不等于零拷贝，该判读已撤回。**
 
 ### 1.3 l769：桌面达成

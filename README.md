@@ -34,7 +34,7 @@
 
 ---
 
-## 三次关键突破（为什么能到桌面）
+## 关键突破与路线（为什么能到桌面）
 
 ### 1. l730：交还系统 UI — 最后一道开机墙不是 GPU，是内核自己写错了 plist
 
@@ -45,17 +45,22 @@ SpringBoard 永远不 `finishedStartup`。
 只改 **67 个文件字节**：保留官方完成态，把强制态写去无害路径 `com.apple.migratiox.plist`。
 结果：`Migration not necessary`、`finishedStartup:YES`、`Dismissing overlay`，锁屏出现。
 
-### 2. l750 / l738：DPU 直出可行
+### 2. l738 / l750：DPU 直出——可行性已证，实现未落地
 
 `l737` 的 `Kernel data abort (esr 0x96000010)` 是**探针地址写错**
-（`0xae004000`，比真 VIG0 `0xae05000` 低 0x1000），不是 DPU 不可用。
-
-两个纯数据值即可打开 DPU 直出：
+（`0xae004000`，比真 VIG0 `0xae05000` 低 0x1000），不是 DPU 不可用；
+两个数据门也确实存在：
 
 ```text
 native_ufs_dpu_state = 0x80000000   (bit31)
 mode = 2
 ```
+
+**但直出路径当前并不工作**：`native_ufs_dpu_map()` 仍是返回 0 的桩、
+`native_ufs_dpu_state=0`，`NativeLegacyDisplay::startDirect()` 的入口条件
+（`mode>=2 && &map && &state && (state>>31)`）永不成立，`directOn` 恒为
+false，`directSlot()` / `flip()` 是死代码。**当前显示路径仍是
+「原生 GPU 合成 + 每帧 CPU 16 MiB blit 到 GOP」**，见[路线图](#路线图已完成什么还缺什么)。
 
 > 注意：`ncpy=0` **不等于**零拷贝，该判读已撤回。
 
@@ -424,7 +429,6 @@ darwinboot-memory-size  = 0x20000000    512 MiB 连续窗口
 | **原生 Home Screen** | ✅ | l769：`ToHome` / `UI Locked:NO` / 无 `ForceLockKey` |
 | 触摸输入 | ✅ | `NT36523`，`fingers 4→436`，client = `backboardd` |
 | GPU 合成 + scanout 接管 | ✅ | l771：`P4/PF` 生效，GPU 服务 6 帧 |
-| DPU 直出通路 | ✅ 已证可行 | `native_ufs_dpu_state` bit31 + `mode=2` |
 | 8 核 SMP | ✅ | 7 个副核全部 `st=7 running` |
 | UFS 根卷 + RAM Data | ✅ | APFS 只读根 + `nabuvar` |
 | 无人值守复位 | ✅ | `pet=600` + `pon 0x80041` 自动回 TWRP |
@@ -434,6 +438,7 @@ darwinboot-memory-size  = 0x20000000    512 MiB 连续窗口
 | 能力 | 状态 | 缺口 |
 |---|---|---|
 | **流畅度** | ⚠️ 0% | `present` 均值 221 ms、尾帧 844 ms；理论上限 3.5–7 fps |
+| DPU 直出 | ⚠️ 未落地 | `native_ufs_dpu_map` 仍为返回 0 的桩，`startDirect()` 恒不进入；当前走 CPU blit |
 | GPU 频率策略 | ⚠️ 缺 | GMU 频率策略未实现，当前非最优档 |
 | 背光控制 | ⚠️ 缺 | `backlight factor:0` 只有默认值 |
 | 持久化 Data | ⚠️ 部分 | 只有 RAM 种子，掉电即失 |

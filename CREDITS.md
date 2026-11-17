@@ -27,7 +27,7 @@
 | **ArmDTPlatform** | `UniXNU/ArmDTPlatform` | 用于解析 ADT |
 | **DarwinBoot** | `UniXNU/DarwinBoot` | XNU 加载器（Mach-O 解析、ADT 校验、ExitBootServices、跳转）|
 | **ShengUfs**（我们叫 `NativeUfs`） | `UniXNU/ShengUfs` | 加诊断导出区、`NABULOG1`、DPU 探针、WDT pet 路径、`writable[]` 属主表 |
-| **GopFramebuffer** | `UniXNU/GopFramebuffer` | 加 `startDirect()`/`flip()` 做 DPU 直出；`NabuSmmuMapper` 是新增 |
+| **GopFramebuffer** | `UniXNU/GopFramebuffer` | 加 `startDirect()`/`flip()` 直出框架（`native_ufs_dpu_map` 仍为桩，未落地）；`NabuSmmuMapper` 是新增 |
 | **Adreno740** | `UniXNU/Adreno740` | 加两遍扫描的 `importTask`、WIMG 位掩码匹配 |
 | **AdrenoMetal** | `UniXNU/AdrenoMetal` | Metal 前端经 metal2vulkan + Turnip 服务用户态 |
 | **ShengNovatekTouch** | `UniXNU/ShengNovatekTouch` | NT36523 触摸协议 |
